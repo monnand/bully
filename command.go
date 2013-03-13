@@ -1,27 +1,28 @@
 package main
 
 import (
-	"labix.org/v2/mgo/bson"
-	"io"
 	"encoding/binary"
 	"errors"
+	"io"
+	"labix.org/v2/mgo/bson"
 	"math/big"
+	"net"
 )
 
 const (
-	cmdHELLO uint8 = 1
+	cmdHELLO       uint8 = 1
 	cmdHELLO_REPLY uint8 = 2
-	cmdITSME uint8 = 3
-	cmdBYE uint8 = 4
-	cmdDUP_CONN uint8 = 5
+	cmdITSME       uint8 = 3
+	cmdBYE         uint8 = 4
+	cmdDUP_CONN    uint8 = 5
 )
 
 type command struct {
-	src *big.Int
-	replyWriter io.WriteCloser
-	Cmd uint8
-	Header map[string]string ",omitempty"
-	Body []byte ",omitempty"
+	src         *big.Int
+	replyWriter net.Conn
+	Cmd         uint8
+	Header      map[string]string ",omitempty"
+	Body        []byte            ",omitempty"
 }
 
 var ErrCannotReadFull = errors.New("Cannot read full length")
@@ -79,4 +80,3 @@ func writeCommand(writer io.Writer, cmd *command) error {
 	}
 	return nil
 }
-

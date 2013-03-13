@@ -1,13 +1,12 @@
 package main
 
 import (
-	"math/big"
 	"crypto/sha256"
-	"github.com/nu7hatch/gouuid"
-	"time"
 	"errors"
+	"github.com/nu7hatch/gouuid"
+	"math/big"
 	"net"
-	"io"
+	"time"
 )
 
 func stringToBig(str string) *big.Int {
@@ -20,9 +19,34 @@ func stringToBig(str string) *big.Int {
 }
 
 type Bully struct {
-	myId *big.Int
-	cmdChan chan *command
+	myId     *big.Int
+	cmdChan  chan *command
 	ctrlChan chan *control
+}
+
+var ErrUnknownError = errors.New("Unknown")
+
+func (self *Bully) AddCandidate(addrStr string, id *big.Int) error {
+	addr, err := net.ResolveTCPAddr("tcp", addrStr)
+	if err != nil {
+		return err
+	}
+	ctrl := new(control)
+	ctrl.addr = addr
+	ctrl.id = id
+	ctrl.cmd = ctrlADD
+	replyChan := make(chan *controlReply)
+	ctrl.replyChan = replyChan
+
+	self.ctrlChan <- ctrl
+	reply := <-replyChan
+	if reply == nil {
+		return ErrUnknownError
+	}
+	if reply.err != nil {
+		return reply.err
+	}
+	return nil
 }
 
 func commandCollector(src *big.Int, conn net.Conn, cmdChan chan<- *command, timeout time.Duration) {
@@ -62,18 +86,18 @@ func NewBully(ln net.Listener, myId *big.Int) *Bully {
 }
 
 type node struct {
-	id *big.Int
-	writer io.WriteCloser
+	id   *big.Int
+	conn net.Conn
 }
 
-func insertNode(l []*node, id *big.Int, writer io.WriteCloser) ([]*node, bool) {
+func insertNode(l []*node, id *big.Int, conn net.Conn) ([]*node, bool) {
 	n := findNode(l, id)
 	if nil != n {
 		return l, false
 	}
 	n = new(node)
 	n.id = id
-	n.writer = writer
+	n.conn = conn
 	return append(l, n), true
 }
 
@@ -86,31 +110,6 @@ func findNode(l []*node, id *big.Int) *node {
 	return nil
 }
 
-var ErrUnknownError = errors.New("Unknown")
-
-func (self *Bully) AddCandidate(addrStr string, id *big.Int) error {
-	addr, err := net.ResolveTCPAddr("tcp", addrStr)
-	if err != nil {
-		return err
-	}
-	ctrl := new(control)
-	ctrl.addr = addr
-	ctrl.id = id
-	ctrl.cmd = ctrlADD
-	replyChan := make(chan *controlReply)
-	ctrl.replyChan = replyChan
-
-	self.ctrlChan<-ctrl
-	reply := <-replyChan
-	if reply == nil {
-		return ErrUnknownError
-	}
-	if reply.err != nil {
-		return reply.err
-	}
-	return nil
-}
-
 const (
 	ctrlADD = iota
 	ctrlQUERY
@@ -118,14 +117,14 @@ const (
 
 type controlReply struct {
 	addr net.Addr
-	id *big.Int
-	err error
+	id   *big.Int
+	err  error
 }
 
 type control struct {
-	cmd int
-	addr net.Addr
-	id *big.Int
+	cmd       int
+	addr      net.Addr
+	id        *big.Int
 	replyChan chan<- *controlReply
 }
 
@@ -175,7 +174,7 @@ func (self *Bully) handshake(addr net.Addr, id *big.Int, candy []*node) error {
 		}
 	}
 	candy, _ = insertNode(candy, rId, conn)
-	go commandCollector(rId, conn, self.cmdChan, 10 * time.Second)
+	go commandCollector(rId, conn, self.cmdChan, 10*time.Second)
 
 	return nil
 }
@@ -249,10 +248,10 @@ func (self *Bully) replyHandshake(conn net.Conn) {
 	rId := new(big.Int).SetBytes(cmd.Body)
 	cmd.src = rId
 	cmd.replyWriter = conn
-	go commandCollector(rId, conn, self.cmdChan, 10 * time.Second)
+	go commandCollector(rId, conn, self.cmdChan, 10*time.Second)
 	select {
-	case self.cmdChan<-cmd:
-	case <-time.After(10*time.Second):
+	case self.cmdChan <- cmd:
+	case <-time.After(10 * time.Second):
 	}
 	return
 }
@@ -266,4 +265,3 @@ func (self *Bully) listen(ln net.Listener) {
 		go self.replyHandshake(conn)
 	}
 }
-

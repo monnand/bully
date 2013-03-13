@@ -39,7 +39,7 @@ func testWriteThenRead(cmd *command, t *testing.T) {
 		t.Errorf("Read error: %v\n", err)
 	}
 
-	cmd.src := new(big.Int).SetString("123456", 10)
+	cmd.src, _ = new(big.Int).SetString("123456", 10)
 	if !cmdEq(shadow, cmd) {
 		t.Errorf("Not equal")
 	}

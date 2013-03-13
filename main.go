@@ -2,11 +2,11 @@ package main
 
 import (
 	"flag"
-	"net"
 	"fmt"
+	"net"
 	"os"
-	"strings"
 	"strconv"
+	"strings"
 )
 
 var argvMyAddress = flag.String("addr", "127.0.0.1:8117", "Public address of this host in the format of IP:Port. Example: 192.168.1.10:8117")
@@ -42,4 +42,3 @@ func main() {
 	web := NewWebAPI(bully)
 	web.Run("127.0.0.1:8080")
 }
-
