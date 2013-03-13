@@ -5,9 +5,20 @@ import (
 	"io"
 	"encoding/binary"
 	"errors"
+	"math/big"
+)
+
+const (
+	cmdHELLO uint8 = 1
+	cmdHELLO_REPLY uint8 = 2
+	cmdITSME uint8 = 3
+	cmdBYE uint8 = 4
+	cmdDUP_CONN uint8 = 5
 )
 
 type command struct {
+	src *big.Int
+	replyWriter io.WriteCloser
 	Cmd uint8
 	Header map[string]string ",omitempty"
 	Body []byte ",omitempty"

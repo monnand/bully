@@ -33,7 +33,12 @@ func main() {
 	fmt.Printf("Bind addr: %v\n", bindAddr)
 	fmt.Printf("Public address: %v\n", myAddr)
 
-	bully := NewBully("")
+	ln, err := net.Listen("tcp", bindAddr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		return
+	}
+	bully := NewBully(ln, nil)
 	web := NewWebAPI(bully)
 	web.Run("127.0.0.1:8080")
 }

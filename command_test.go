@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 	"bytes"
+	"math/big"
 )
 
 func cmdEq(a, b *command) bool {
@@ -38,6 +39,7 @@ func testWriteThenRead(cmd *command, t *testing.T) {
 		t.Errorf("Read error: %v\n", err)
 	}
 
+	cmd.src := new(big.Int).SetString("123456", 10)
 	if !cmdEq(shadow, cmd) {
 		t.Errorf("Not equal")
 	}
