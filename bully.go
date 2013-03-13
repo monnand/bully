@@ -190,6 +190,8 @@ type control struct {
 }
 
 var ErrUnmatchedId = errors.New("Unmatched node id")
+var ErrTryLater = errors.New("Try it later")
+var ErrBadProtoImpl = errors.New("Bad protocol implementation")
 
 func (self *Bully) handshake(addr net.Addr, id *big.Int, candy []*node, timeout time.Duration) ([]*node, error) {
 	if id != nil {
@@ -225,9 +227,16 @@ func (self *Bully) handshake(addr net.Addr, id *big.Int, candy []*node, timeout 
 		return candy, err
 	}
 	if reply.Cmd != cmdHELLO_REPLY {
-		fmt.Printf("Not a good move\n")
 		conn.Close()
-		return candy, nil
+		switch reply.Cmd {
+		case cmdTRY_LATER:
+			return candy, ErrTryLater
+		case cmdDUP_CONN:
+			return candy, nil
+		case cmdITSME:
+			return candy, nil
+		}
+		return candy, ErrBadProtoImpl
 	}
 	rId := new(big.Int).SetBytes(reply.Body)
 	if id != nil {
@@ -239,6 +248,15 @@ func (self *Bully) handshake(addr net.Addr, id *big.Int, candy []*node, timeout 
 	go commandCollector(rId, conn, self.cmdChan, 10*time.Second)
 
 	return candy, nil
+}
+
+func (self *Bully) electUntilDie(candy []*node, timeout time.Duration) *node {
+	leader, err := self.elect(candy, timeout)
+	// Try until we get a leader
+	for leader == nil || err != nil {
+		leader, err = self.elect(candy, timeout)
+	}
+	return leader
 }
 
 var ErrNeedNewElection = errors.New("Need another round")
@@ -374,10 +392,15 @@ func (self *Bully) process() {
 				if err != nil {
 					continue
 				}
-				leader, err = self.elect(candy, leaderTimeout)
-				// Try until we get a leader
-				for leader == nil || err != nil {
-					leader, err = self.elect(candy, leaderTimeout)
+				leader = self.electUntilDie(candy, leaderTimeout)
+			case cmdCOORDIN:
+				n := findNode(candy, cmd.src)
+				if n == nil {
+					leader = self.electUntilDie(candy, leaderTimeout)
+				} else if n.id.Cmp(self.myId) < 0 {
+					leader = self.electUntilDie(candy, leaderTimeout)
+				} else {
+					leader = n
 				}
 			}
 		case ctrl := <-self.ctrlChan:
@@ -406,12 +429,7 @@ func (self *Bully) process() {
 				close(ctrl.replyChan)
 			case ctrlQUERY_LEADER:
 				if leader == nil {
-					var err error
-					leader, err = self.elect(candy, leaderTimeout)
-					// Try until we get a leader
-					for leader == nil || err != nil {
-						leader, err = self.elect(candy, leaderTimeout)
-					}
+					leader = self.electUntilDie(candy, leaderTimeout)
 				}
 				reply := new(controlReply)
 				if leader.conn != nil {
@@ -471,4 +489,3 @@ func (self *Bully) listen(ln net.Listener) {
 		go self.replyHandshake(conn)
 	}
 }
-
