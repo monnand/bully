@@ -22,11 +22,19 @@ func NewWebAPI(bully *Bully) *WebAPI {
 }
 
 func (self *WebAPI) join(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Success\r\n")
+	fmt.Fprintf(w, "Not implemented\r\n")
 }
 
 func (self *WebAPI) leader(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Success\r\n")
+	leader, err := self.bully.Leader()
+	if err != nil {
+		fmt.Fprint(w, "Error: %v\r\n", err)
+	}
+	if self.bully.MyId().Cmp(leader.Id) == 0 {
+		fmt.Fprintf(w, "me\r\n")
+	} else {
+		fmt.Fprintf(w, "%v\r\n", leader.Addr)
+	}
 }
 
 func (self *WebAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -48,3 +56,4 @@ func (self *WebAPI) Run(addr string) {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 	}
 }
+

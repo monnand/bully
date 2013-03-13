@@ -5,33 +5,18 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strconv"
+	"time"
 	"strings"
 )
 
-var argvMyAddress = flag.String("addr", "127.0.0.1:8117", "Public address of this host in the format of IP:Port. Example: 192.168.1.10:8117")
+var argvPort = flag.Int("port", 8117, "port to listen")
+var argvCandidates = flag.String("nodes", "", "comma separated list of nodes.")
+var argvRestBind = flag.String("rest", "127.0.0.1:8080", "Network address which will be bind to a restful service")
 
 func main() {
 	flag.Parse()
-	myAddr, err := net.ResolveTCPAddr("tcp", *argvMyAddress)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Invalid address %v: %v\n", *argvMyAddress, err)
-		return
-	}
-	sa := strings.Split(*argvMyAddress, ":")
-	if len(sa) < 2 {
-		fmt.Fprintf(os.Stderr, "The public address must contain the port number. IP:Port\n")
-		return
-	}
-	_, err = strconv.Atoi(sa[1])
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "The port number has to be an integer: %v\n", err)
-		return
-	}
-	bindAddr := fmt.Sprintf("0.0.0.0:%v", sa[1])
-
+	bindAddr := fmt.Sprintf("0.0.0.0:%v", *argvPort)
 	fmt.Printf("Bind addr: %v\n", bindAddr)
-	fmt.Printf("Public address: %v\n", myAddr)
 
 	ln, err := net.Listen("tcp", bindAddr)
 	if err != nil {
@@ -39,6 +24,18 @@ func main() {
 		return
 	}
 	bully := NewBully(ln, nil)
+
+	nodeAddr := strings.Split(*argvCandidates, ",")
+	dialTimtout := 5 * time.Second
+
+	for _, node := range nodeAddr {
+		err := bully.AddCandidate(node, nil, dialTimtout)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v cannot be added: %v\n", node, err)
+		}
+	}
+
 	web := NewWebAPI(bully)
-	web.Run("127.0.0.1:8080")
+	web.Run(*argvRestBind)
 }
+
