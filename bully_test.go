@@ -56,6 +56,7 @@ func buildConnections(bullies []*Bully, t *testing.T) {
 }
 
 func testSameViewOnBullies(bullies []*Bully, t *testing.T) {
+	n := len(bullies)
 	for _, alice := range bullies {
 		for _, bob := range bullies {
 
@@ -63,6 +64,10 @@ func testSameViewOnBullies(bullies []*Bully, t *testing.T) {
 			aliceCandy := alice.CandidateList()
 			if len(bobCandy) != len(aliceCandy) {
 				t.Errorf("Not same number of candidates!")
+			}
+
+			if len(bobCandy) != n {
+				t.Errorf("Should have %v candidates; Now have %v", n, len(bobCandy))
 			}
 
 			for _, bc := range bobCandy {
