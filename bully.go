@@ -22,6 +22,7 @@ type Bully struct {
 	myId     *big.Int
 	cmdChan  chan *command
 	ctrlChan chan *control
+	ln net.Listener
 }
 
 type Candidate struct {
@@ -103,6 +104,7 @@ func NewBully(ln net.Listener, myId *big.Int) *Bully {
 	}
 	ret.cmdChan = make(chan *command)
 	ret.ctrlChan = make(chan *control)
+	ret.ln = ln
 	go ret.listen(ln)
 	go ret.process()
 	return ret
@@ -250,6 +252,10 @@ func (self *Bully) process() {
 				}
 				ctrl.replyChan <- reply
 			case ctrlQUERY_CANDY:
+				reply := new(controlReply)
+				reply.addr = self.ln.Addr()
+				reply.id = self.myId
+				ctrl.replyChan <- reply
 				for _, node := range candy {
 					reply := new(controlReply)
 					reply.addr = node.conn.RemoteAddr()
