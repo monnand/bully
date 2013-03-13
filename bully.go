@@ -25,6 +25,7 @@ type Bully struct {
 	cmdChan  chan *command
 	ctrlChan chan *control
 	ln       net.Listener
+	myAddr net.Addr
 }
 
 type Candidate struct {
@@ -36,6 +37,13 @@ var ErrUnknownError = errors.New("Unknown")
 
 func (self *Bully) MyId() *big.Int {
 	return self.myId
+}
+
+func (self *Bully) MyAddr() net.Addr {
+	if self.myAddr != nil {
+		return self.myAddr
+	}
+	return self.localhost()
 }
 
 func (self *Bully) AddCandidate(addrStr string, id *big.Int, timeout time.Duration) error {
@@ -128,7 +136,6 @@ func commandCollector(src *big.Int, conn net.Conn, cmdChan chan<- *command, time
 	for {
 		cmd, err := readCommand(conn)
 		if err != nil {
-			fmt.Printf("[CommandCollector] I cannot read from %v\n", src)
 			cmd := new(command)
 			cmd.src = src
 			cmd.Cmd = cmdBYE
@@ -136,7 +143,6 @@ func commandCollector(src *big.Int, conn net.Conn, cmdChan chan<- *command, time
 			return
 		}
 		if cmd.Cmd == cmdITSME || cmd.Cmd == cmdBYE {
-			fmt.Printf("[CommandCollector] I got command %v from %v\n", cmd.Cmd, src)
 			cmd := new(command)
 			cmd.src = src
 			cmd.Cmd = cmdBYE
@@ -287,6 +293,7 @@ func (self *Bully) handshake(addr net.Addr, id *big.Int, candy []*node, timeout 
 			conn.Close()
 			return candy, nil
 		case cmdITSME:
+			self.myAddr = addr
 			conn.Close()
 			return candy, nil
 		}
@@ -395,7 +402,7 @@ func (self *Bully) elect(candy []*node, timeout time.Duration) (leader *node, er
 	return
 }
 
-func (self *Bully) myAddress() net.Addr {
+func (self *Bully) localhost() net.Addr {
 	addrStr := self.ln.Addr().String()
 	ae := strings.Split(addrStr, ":")
 	addrStr = fmt.Sprintf("127.0.0.1:%v", ae[len(ae)-1])
@@ -410,7 +417,6 @@ func (self *Bully) process() {
 	for {
 		select {
 		case cmd := <-self.cmdChan:
-			fmt.Printf("Command: %v; myid=%v\n", cmd.Cmd, self.myId)
 			switch cmd.Cmd {
 			case cmdHELLO:
 				if cmd.src.Cmp(self.myId) == 0 {
@@ -434,7 +440,6 @@ func (self *Bully) process() {
 					}
 					candy, _ = insertNode(candy, cmd.src, cmd.replyWriter)
 				} else {
-					fmt.Printf("[Proccess] This is a duplicated conn from %v\n", cmd.src)
 					reply := new(command)
 					reply.Cmd = cmdDUP_CONN
 					writeCommand(cmd.replyWriter, reply)
@@ -473,7 +478,7 @@ func (self *Bully) process() {
 				ctrl.replyChan <- reply
 			case ctrlQUERY_CANDY:
 				reply := new(controlReply)
-				reply.addr = self.myAddress()
+				reply.addr = self.MyAddr()
 				reply.id = self.myId
 				ctrl.replyChan <- reply
 				for _, node := range candy {
@@ -491,7 +496,7 @@ func (self *Bully) process() {
 				if leader.conn != nil {
 					reply.addr = leader.conn.RemoteAddr()
 				} else {
-					reply.addr = self.myAddress()
+					reply.addr = self.MyAddr()
 				}
 				reply.id = leader.id
 				ctrl.replyChan <- reply

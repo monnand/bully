@@ -23,9 +23,6 @@ func TestSingleBully(t *testing.T) {
 	if len(candy) != 1 {
 		t.Errorf("Wrong!")
 	}
-	for _, c := range candy {
-		fmt.Printf("%v; %v\n", c.Addr, c.Id)
-	}
 	ln.Close()
 }
 
@@ -47,7 +44,7 @@ func buildBullies(startPort, N int, t *testing.T) []*Bully {
 func buildConnections(bullies []*Bully, t *testing.T) {
 	for _, alice := range bullies {
 		for _, bob := range bullies {
-			err := alice.AddCandidate(bob.myAddress().String(), nil, 3*time.Second)
+			err := alice.AddCandidate(bob.localhost().String(), nil, 3*time.Second)
 			if err != nil {
 				t.Errorf("%v\n", err)
 			}
@@ -114,14 +111,10 @@ func cleanBullies(bullies []*Bully) {
 }
 
 func TestDoubleBullyAuto(t *testing.T) {
-	fmt.Printf("-------Double Bully Auto-------\n")
 	bullies := buildBullies(8088, 2, t)
-	fmt.Printf("-------Double Bully Auto Build Connections-------\n")
 	buildConnections(bullies, t)
 	testSameViewOnBullies(bullies, t)
-	fmt.Printf("-------Double Bully Auto Clean-------\n")
 	cleanBullies(bullies)
-	fmt.Printf("-------Double Bully Auto Done-------\n")
 }
 
 func TestSingleBullyAuto(t *testing.T) {
@@ -140,7 +133,6 @@ func TestTripleBullyAuto(t *testing.T) {
 
 
 func TestDoubleBully(t *testing.T) {
-	fmt.Printf("-------Double Bully-------\n")
 	aliceLn, err := net.Listen("tcp", ":8802")
 	if err != nil {
 		t.Errorf("%v\n", err)
