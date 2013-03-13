@@ -7,6 +7,7 @@ import (
 	"github.com/nu7hatch/gouuid"
 	"math/big"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -33,6 +34,10 @@ type Candidate struct {
 
 var ErrUnknownError = errors.New("Unknown")
 
+func (self *Bully) MyId() *big.Int {
+	return self.myId
+}
+
 func (self *Bully) AddCandidate(addrStr string, id *big.Int, timeout time.Duration) error {
 	addr, err := net.ResolveTCPAddr("tcp", addrStr)
 	if err != nil {
@@ -41,7 +46,7 @@ func (self *Bully) AddCandidate(addrStr string, id *big.Int, timeout time.Durati
 	if addr == nil {
 		return ErrUnknownError
 	}
-	if timeout <= 1 * time.Second {
+	if timeout <= 1*time.Second {
 		timeout = 2 * time.Second
 	}
 	ctrl := new(control)
@@ -159,72 +164,71 @@ type control struct {
 	cmd       int
 	addr      net.Addr
 	id        *big.Int
-	timeout time.Duration
+	timeout   time.Duration
 	replyChan chan<- *controlReply
 }
 
 var ErrUnmatchedId = errors.New("Unmatched node id")
 
-func (self *Bully) handshake(addr net.Addr, id *big.Int, candy []*node, timeout time.Duration) error {
+func (self *Bully) handshake(addr net.Addr, id *big.Int, candy []*node, timeout time.Duration) ([]*node, error) {
 	if id != nil {
 		cmp := id.Cmp(self.myId)
 		if cmp > 0 {
 			n := findNode(candy, id)
 			if n != nil {
-				return nil
+				return candy, nil
 			}
 		} else if cmp < 0 {
 			// If we know the id of a node,
 			// then we only connect to the nodes with higher id,
 			// and let the nodes with lower id connect us.
-			return nil
+			return candy, nil
 		} else {
 			// It is ourselves, don't need to add it.
-			return nil
+			return candy, nil
 		}
 	}
 	conn, err := net.DialTimeout("tcp", addr.String(), timeout)
 	if err != nil {
-		return err
+		return candy, err
 	}
 	cmd := new(command)
 	cmd.Cmd = cmdHELLO
 	cmd.Body = self.myId.Bytes()
 	err = writeCommand(conn, cmd)
 	if err != nil {
-		return err
+		return candy, err
 	}
 	reply, err := readCommand(conn)
 	if err != nil {
-		return err
+		return candy, err
 	}
 	if reply.Cmd != cmdHELLO_REPLY {
+		fmt.Printf("Not a good move\n")
 		conn.Close()
-		return nil
+		return candy, nil
 	}
 	rId := new(big.Int).SetBytes(reply.Body)
 	if id != nil {
 		if rId.Cmp(id) != 0 {
-			return ErrUnmatchedId
+			return candy, ErrUnmatchedId
 		}
 	}
 	candy, _ = insertNode(candy, rId, conn)
 	go commandCollector(rId, conn, self.cmdChan, 10*time.Second)
 
-	return nil
+	return candy, nil
 }
 
 func (self *Bully) process() {
 	candy := make([]*node, 0, 10)
 	//var leader *node
-	fmt.Printf("Start processing. My ID: %v\n", self.myId)
 	for {
 		select {
 		case cmd := <-self.cmdChan:
 			fmt.Printf("Command: %v; myid=%v\n", cmd.Cmd, self.myId)
 			switch cmd.Cmd {
 			case cmdHELLO:
-				fmt.Printf("Command HELLO: %v; myid=%v\n", cmd.src, self.myId)
 				if cmd.src.Cmp(self.myId) == 0 {
 					reply := new(command)
 					reply.Cmd = cmdITSME
@@ -255,8 +259,8 @@ func (self *Bully) process() {
 		case ctrl := <-self.ctrlChan:
 			switch ctrl.cmd {
 			case ctrlADD:
-				fmt.Printf("Control-Add: %v %v\n", ctrl.addr, ctrl.id)
-				err := self.handshake(ctrl.addr, ctrl.id, candy, ctrl.timeout)
+				var err error
+				candy, err = self.handshake(ctrl.addr, ctrl.id, candy, ctrl.timeout)
 				reply := new(controlReply)
 				if err != nil {
 					reply.err = err
@@ -266,7 +270,10 @@ func (self *Bully) process() {
 				ctrl.replyChan <- reply
 			case ctrlQUERY_CANDY:
 				reply := new(controlReply)
-				reply.addr = self.ln.Addr()
+				addrStr := self.ln.Addr().String()
+				ae := strings.Split(addrStr, ":")
+				addrStr = fmt.Sprintf("127.0.0.1:%v", ae[len(ae)-1])
+				reply.addr, _ = net.ResolveTCPAddr("tcp", addrStr)
 				reply.id = self.myId
 				ctrl.replyChan <- reply
 				for _, node := range candy {
@@ -287,7 +294,6 @@ func (self *Bully) replyHandshake(conn net.Conn) {
 		conn.Close()
 		return
 	}
-	fmt.Printf("Receive HELLO COMMAND\n")
 	if cmd.Cmd != cmdHELLO {
 		conn.Close()
 		return
@@ -305,13 +311,11 @@ func (self *Bully) replyHandshake(conn net.Conn) {
 		conn.Close()
 		return
 	}
-	fmt.Printf("Receive HELLO COMMAND: %v\n", rId)
 	cmd.src = rId
 	cmd.replyWriter = conn
 	go commandCollector(rId, conn, self.cmdChan, 10*time.Second)
 	select {
 	case self.cmdChan <- cmd:
-		fmt.Printf("Sent the hello command through channle\n")
 	case <-time.After(10 * time.Second):
 	}
 	return
@@ -326,7 +330,6 @@ func (self *Bully) listen(ln net.Listener) {
 		if conn == nil {
 			continue
 		}
-		fmt.Printf("RECV connection from %v\n", conn.RemoteAddr())
 		go self.replyHandshake(conn)
 	}
 }

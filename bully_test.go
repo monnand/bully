@@ -30,6 +30,7 @@ func TestSingleBully(t *testing.T) {
 }
 
 func TestDoubleBully(t *testing.T) {
+	fmt.Printf("-------Double Bully-------\n")
 	aliceLn, err := net.Listen("tcp", ":8802")
 	if err != nil {
 		t.Errorf("%v\n", err)
@@ -51,13 +52,23 @@ func TestDoubleBully(t *testing.T) {
 		t.Errorf("%v\n", err)
 	}
 
-	candy := bob.CandidateList()
-	if len(candy) != 2 {
-		t.Errorf("Should be 2 candidate!")
+	bobCandy := bob.CandidateList()
+	aliceCandy := alice.CandidateList()
+	if len(bobCandy) != len(aliceCandy) {
+		t.Errorf("Should be 2 candidates!")
 	}
-	fmt.Printf("Candidates in bob's list:\n")
-	for _, c := range candy {
-		fmt.Printf("%v; %v\n", c.Addr, c.Id)
+
+	for _, bc := range bobCandy {
+		found := false
+		for _, ac := range aliceCandy {
+			if bc.Id.Cmp(ac.Id) == 0 {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Bob's candidate %v cannot be found in Alice's", bc.Id)
+		}
 	}
 	aliceLn.Close()
 	bobLn.Close()
