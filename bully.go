@@ -102,7 +102,7 @@ func (self *Bully) Leader() (cand *Candidate, err error) {
 		err = reply.err
 		return
 	}
-	if reply.addr == nil || reply.id== nil {
+	if reply.addr == nil || reply.id == nil {
 		err = ErrUnknownError
 		return
 	}
@@ -112,20 +112,38 @@ func (self *Bully) Leader() (cand *Candidate, err error) {
 	return
 }
 
+func (self *Bully) Finalize() {
+	self.ln.Close()
+	ctrl := new(control)
+	ctrl.cmd = ctrlQUIT
+	replyChan := make(chan *controlReply)
+	ctrl.replyChan = replyChan
+
+	self.ctrlChan <- ctrl
+	<-replyChan
+}
+
 func commandCollector(src *big.Int, conn net.Conn, cmdChan chan<- *command, timeout time.Duration) {
-	defer func() {
-		conn.Close()
-		cmd := new(command)
-		cmd.src = src
-		cmd.Cmd = cmdBYE
-		cmdChan <- cmd
-	}()
+	defer conn.Close()
 	for {
 		cmd, err := readCommand(conn)
 		if err != nil {
+			fmt.Printf("[CommandCollector] I cannot read from %v\n", src)
+			cmd := new(command)
+			cmd.src = src
+			cmd.Cmd = cmdBYE
+			cmdChan <- cmd
 			return
 		}
 		if cmd.Cmd == cmdITSME || cmd.Cmd == cmdBYE {
+			fmt.Printf("[CommandCollector] I got command %v from %v\n", cmd.Cmd, src)
+			cmd := new(command)
+			cmd.src = src
+			cmd.Cmd = cmdBYE
+			cmdChan <- cmd
+			return
+		}
+		if cmd.Cmd == cmdDUP_EXIT {
 			return
 		}
 		cmd.src = src
@@ -134,6 +152,10 @@ func commandCollector(src *big.Int, conn net.Conn, cmdChan chan<- *command, time
 		case cmdChan <- cmd:
 			continue
 		case <-time.After(timeout):
+			cmd := new(command)
+			cmd.src = src
+			cmd.Cmd = cmdBYE
+			cmdChan <- cmd
 			return
 		}
 	}
@@ -199,6 +221,7 @@ const (
 	ctrlADD = iota
 	ctrlQUERY_LEADER
 	ctrlQUERY_CANDY
+	ctrlQUIT
 )
 
 type controlReply struct {
@@ -253,13 +276,18 @@ func (self *Bully) handshake(addr net.Addr, id *big.Int, candy []*node, timeout 
 		return candy, err
 	}
 	if reply.Cmd != cmdHELLO_REPLY {
-		conn.Close()
 		switch reply.Cmd {
 		case cmdTRY_LATER:
+			conn.Close()
 			return candy, ErrTryLater
 		case cmdDUP_CONN:
+			reply := new(command)
+			reply.Cmd = cmdDUP_EXIT
+			writeCommand(conn, reply)
+			conn.Close()
 			return candy, nil
 		case cmdITSME:
+			conn.Close()
 			return candy, nil
 		}
 		return candy, ErrBadProtoImpl
@@ -404,10 +432,10 @@ func (self *Bully) process() {
 					}
 					candy, _ = insertNode(candy, cmd.src, cmd.replyWriter)
 				} else {
+					fmt.Printf("[Proccess] This is a duplicated conn from %v\n", cmd.src)
 					reply := new(command)
 					reply.Cmd = cmdDUP_CONN
 					writeCommand(cmd.replyWriter, reply)
-					cmd.replyWriter.Close()
 				}
 			case cmdBYE:
 				candy = removeNode(candy, cmd.src)
@@ -465,6 +493,13 @@ func (self *Bully) process() {
 				}
 				reply.id = leader.id
 				ctrl.replyChan <- reply
+			case ctrlQUIT:
+				for _, node := range candy {
+					reply := new(command)
+					reply.Cmd = cmdBYE
+					writeCommand(node.conn, reply)
+				}
+				close(ctrl.replyChan)
 			}
 		}
 	}

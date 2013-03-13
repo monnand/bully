@@ -19,6 +19,7 @@ const (
 	cmdELECT_OK    uint8 = 7
 	cmdCOORDIN     uint8 = 8
 	cmdTRY_LATER uint8 = 9
+	cmdDUP_EXIT uint8 = 10
 )
 
 type command struct {
