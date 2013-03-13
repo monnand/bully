@@ -86,6 +86,32 @@ func (self *Bully) CandidateList() []*Candidate {
 	return ret
 }
 
+func (self *Bully) Leader() (cand *Candidate, err error) {
+	ctrl := new(control)
+	ctrl.cmd = ctrlQUERY_LEADER
+	replyChan := make(chan *controlReply)
+	ctrl.replyChan = replyChan
+
+	self.ctrlChan <- ctrl
+	reply := <-replyChan
+	if reply == nil {
+		err = ErrUnknownError
+		return
+	}
+	if reply.err != nil {
+		err = reply.err
+		return
+	}
+	if reply.addr == nil || reply.id== nil {
+		err = ErrUnknownError
+		return
+	}
+	cand = new(Candidate)
+	cand.Addr = reply.addr
+	cand.Id = reply.id
+	return
+}
+
 func commandCollector(src *big.Int, conn net.Conn, cmdChan chan<- *command, timeout time.Duration) {
 	defer func() {
 		conn.Close()
