@@ -33,7 +33,7 @@ type Candidate struct {
 
 var ErrUnknownError = errors.New("Unknown")
 
-func (self *Bully) AddCandidate(addrStr string, id *big.Int) error {
+func (self *Bully) AddCandidate(addrStr string, id *big.Int, timeout time.Duration) error {
 	addr, err := net.ResolveTCPAddr("tcp", addrStr)
 	if err != nil {
 		return err
@@ -41,10 +41,14 @@ func (self *Bully) AddCandidate(addrStr string, id *big.Int) error {
 	if addr == nil {
 		return ErrUnknownError
 	}
+	if timeout <= 1 * time.Second {
+		timeout = 2 * time.Second
+	}
 	ctrl := new(control)
 	ctrl.addr = addr
 	ctrl.id = id
 	ctrl.cmd = ctrlADD
+	ctrl.timeout = timeout
 	replyChan := make(chan *controlReply)
 	ctrl.replyChan = replyChan
 
@@ -155,12 +159,13 @@ type control struct {
 	cmd       int
 	addr      net.Addr
 	id        *big.Int
+	timeout time.Duration
 	replyChan chan<- *controlReply
 }
 
 var ErrUnmatchedId = errors.New("Unmatched node id")
 
-func (self *Bully) handshake(addr net.Addr, id *big.Int, candy []*node) error {
+func (self *Bully) handshake(addr net.Addr, id *big.Int, candy []*node, timeout time.Duration) error {
 	if id != nil {
 		cmp := id.Cmp(self.myId)
 		if cmp > 0 {
@@ -178,7 +183,7 @@ func (self *Bully) handshake(addr net.Addr, id *big.Int, candy []*node) error {
 			return nil
 		}
 	}
-	conn, err := net.Dial("tcp", addr.String())
+	conn, err := net.DialTimeout("tcp", addr.String(), timeout)
 	if err != nil {
 		return err
 	}
@@ -251,7 +256,7 @@ func (self *Bully) process() {
 			switch ctrl.cmd {
 			case ctrlADD:
 				fmt.Printf("Control-Add: %v %v\n", ctrl.addr, ctrl.id)
-				err := self.handshake(ctrl.addr, ctrl.id, candy)
+				err := self.handshake(ctrl.addr, ctrl.id, candy, ctrl.timeout)
 				reply := new(controlReply)
 				if err != nil {
 					reply.err = err
@@ -316,6 +321,9 @@ func (self *Bully) listen(ln net.Listener) {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
+			return
+		}
+		if conn == nil {
 			continue
 		}
 		fmt.Printf("RECV connection from %v\n", conn.RemoteAddr())
