@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"github.com/nu7hatch/gouuid"
 	"math/big"
 	"net"
@@ -22,11 +23,11 @@ type Bully struct {
 	myId     *big.Int
 	cmdChan  chan *command
 	ctrlChan chan *control
-	ln net.Listener
+	ln       net.Listener
 }
 
 type Candidate struct {
-	Id *big.Int
+	Id   *big.Int
 	Addr net.Addr
 }
 
@@ -36,6 +37,9 @@ func (self *Bully) AddCandidate(addrStr string, id *big.Int) error {
 	addr, err := net.ResolveTCPAddr("tcp", addrStr)
 	if err != nil {
 		return err
+	}
+	if addr == nil {
+		return ErrUnknownError
 	}
 	ctrl := new(control)
 	ctrl.addr = addr
@@ -96,7 +100,7 @@ func commandCollector(src *big.Int, conn net.Conn, cmdChan chan<- *command, time
 
 func NewBully(ln net.Listener, myId *big.Int) *Bully {
 	ret := new(Bully)
-	if myId != nil {
+	if myId == nil {
 		uu, _ := uuid.NewV4()
 		ret.myId = stringToBig(uu.String())
 	} else {
@@ -208,11 +212,14 @@ func (self *Bully) handshake(addr net.Addr, id *big.Int, candy []*node) error {
 func (self *Bully) process() {
 	candy := make([]*node, 0, 10)
 	//var leader *node
+	fmt.Printf("Start processing. My ID: %v\n", self.myId)
 	for {
 		select {
 		case cmd := <-self.cmdChan:
+			fmt.Printf("Command: %v; myid=%v\n", cmd.Cmd, self.myId)
 			switch cmd.Cmd {
 			case cmdHELLO:
+				fmt.Printf("Command HELLO: %v; myid=%v\n", cmd.src, self.myId)
 				if cmd.src.Cmp(self.myId) == 0 {
 					reply := new(command)
 					reply.Cmd = cmdITSME
@@ -243,6 +250,7 @@ func (self *Bully) process() {
 		case ctrl := <-self.ctrlChan:
 			switch ctrl.cmd {
 			case ctrlADD:
+				fmt.Printf("Control-Add: %v %v\n", ctrl.addr, ctrl.id)
 				err := self.handshake(ctrl.addr, ctrl.id, candy)
 				reply := new(controlReply)
 				if err != nil {
@@ -274,6 +282,7 @@ func (self *Bully) replyHandshake(conn net.Conn) {
 		conn.Close()
 		return
 	}
+	fmt.Printf("Receive HELLO COMMAND\n")
 	if cmd.Cmd != cmdHELLO {
 		conn.Close()
 		return
@@ -284,11 +293,20 @@ func (self *Bully) replyHandshake(conn net.Conn) {
 	}
 
 	rId := new(big.Int).SetBytes(cmd.Body)
+	if rId.Cmp(self.myId) == 0 {
+		reply := new(command)
+		reply.Cmd = cmdITSME
+		writeCommand(conn, reply)
+		conn.Close()
+		return
+	}
+	fmt.Printf("Receive HELLO COMMAND: %v\n", rId)
 	cmd.src = rId
 	cmd.replyWriter = conn
 	go commandCollector(rId, conn, self.cmdChan, 10*time.Second)
 	select {
 	case self.cmdChan <- cmd:
+		fmt.Printf("Sent the hello command through channle\n")
 	case <-time.After(10 * time.Second):
 	}
 	return
@@ -300,6 +318,7 @@ func (self *Bully) listen(ln net.Listener) {
 		if err != nil {
 			continue
 		}
+		fmt.Printf("RECV connection from %v\n", conn.RemoteAddr())
 		go self.replyHandshake(conn)
 	}
 }
