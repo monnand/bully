@@ -18,6 +18,7 @@ const (
 	cmdELECT       uint8 = 6
 	cmdELECT_OK    uint8 = 7
 	cmdCOORDIN     uint8 = 8
+	cmdTRY_LATER uint8 = 9
 )
 
 type command struct {

@@ -87,8 +87,8 @@ func (self *Bully) CandidateList() []*Candidate {
 }
 
 func commandCollector(src *big.Int, conn net.Conn, cmdChan chan<- *command, timeout time.Duration) {
-	defer conn.Close()
 	defer func() {
+		conn.Close()
 		cmd := new(command)
 		cmd.src = src
 		cmd.Cmd = cmdBYE
@@ -153,9 +153,9 @@ func removeNode(l []*node, id *big.Int) []*node {
 		}
 	}
 	if idx >= 0 {
-		l[idx] = l[len(l) - 1]
-		l[len(l) - 1] = nil
-		l = l[:len(l) - 1]
+		l[idx] = l[len(l)-1]
+		l[len(l)-1] = nil
+		l = l[:len(l)-1]
 	}
 	return l
 }
@@ -241,9 +241,98 @@ func (self *Bully) handshake(addr net.Addr, id *big.Int, candy []*node, timeout 
 	return candy, nil
 }
 
+var ErrNeedNewElection = errors.New("Need another round")
+
+func (self *Bully) elect(candy []*node, timeout time.Duration) (leader *node, err error) {
+	higherCandy := make([]*node, 0, len(candy))
+	for _, c := range candy {
+		if c.id.Cmp(self.myId) > 0 {
+			cmd := new(command)
+			cmd.Cmd = cmdELECT
+			err := writeCommand(c.conn, cmd)
+			if err == nil {
+				higherCandy = append(higherCandy, c)
+			}
+		}
+	}
+
+	// No one is higher than me.
+	// I am the leader.
+	if len(higherCandy) <= 0 {
+		leader.conn = nil
+		leader.id = self.myId
+		for _, c := range candy {
+			cmd := new(command)
+			cmd.Cmd = cmdCOORDIN
+			writeCommand(c.conn, cmd)
+		}
+		return
+	}
+	slaved := false
+	for {
+		select {
+		case cmd := <-self.cmdChan:
+			switch cmd.Cmd {
+			case cmdHELLO:
+				reply := new(command)
+				reply.Cmd = cmdTRY_LATER
+				writeCommand(cmd.replyWriter, reply)
+			case cmdELECT:
+				reply := new(command)
+				reply.Cmd = cmdELECT_OK
+				writeCommand(cmd.replyWriter, reply)
+			case cmdELECT_OK:
+				n := findNode(higherCandy, cmd.src)
+				if n == nil {
+					continue
+				}
+				slaved = true
+			case cmdCOORDIN:
+				n := findNode(candy, cmd.src)
+				if n == nil {
+					err = ErrNeedNewElection
+					return
+				}
+				if n.id.Cmp(self.myId) < 0 {
+					err = ErrNeedNewElection
+					return
+				}
+				leader = n
+				return
+			}
+		case <-time.After(timeout):
+			break
+		}
+	}
+
+	// No one replied within time out.
+	// I am the leader.
+	if !slaved {
+		leader.conn = nil
+		leader.id = self.myId
+		for _, c := range candy {
+			cmd := new(command)
+			cmd.Cmd = cmdCOORDIN
+			writeCommand(c.conn, cmd)
+		}
+		return
+	}
+	err = ErrNeedNewElection
+	return
+}
+
+func (self *Bully) myAddress() net.Addr {
+	addrStr := self.ln.Addr().String()
+	ae := strings.Split(addrStr, ":")
+	addrStr = fmt.Sprintf("127.0.0.1:%v", ae[len(ae)-1])
+	ret, _ := net.ResolveTCPAddr("tcp", addrStr)
+	return ret
+}
+
 func (self *Bully) process() {
 	candy := make([]*node, 0, 10)
-	//var leader *node
+	var leader *node
+	leaderTimeout := 10 * time.Second
 	for {
 		select {
 		case cmd := <-self.cmdChan:
@@ -285,6 +374,11 @@ func (self *Bully) process() {
 				if err != nil {
 					continue
 				}
+				leader, err = self.elect(candy, leaderTimeout)
+				// Try until we get a leader
+				for leader == nil || err != nil {
+					leader, err = self.elect(candy, leaderTimeout)
+				}
 			}
 		case ctrl := <-self.ctrlChan:
 			switch ctrl.cmd {
@@ -300,10 +394,7 @@ func (self *Bully) process() {
 				ctrl.replyChan <- reply
 			case ctrlQUERY_CANDY:
 				reply := new(controlReply)
-				addrStr := self.ln.Addr().String()
-				ae := strings.Split(addrStr, ":")
-				addrStr = fmt.Sprintf("127.0.0.1:%v", ae[len(ae)-1])
-				reply.addr, _ = net.ResolveTCPAddr("tcp", addrStr)
+				reply.addr = self.myAddress()
 				reply.id = self.myId
 				ctrl.replyChan <- reply
 				for _, node := range candy {
@@ -313,6 +404,23 @@ func (self *Bully) process() {
 					ctrl.replyChan <- reply
 				}
 				close(ctrl.replyChan)
+			case ctrlQUERY_LEADER:
+				if leader == nil {
+					var err error
+					leader, err = self.elect(candy, leaderTimeout)
+					// Try until we get a leader
+					for leader == nil || err != nil {
+						leader, err = self.elect(candy, leaderTimeout)
+					}
+				}
+				reply := new(controlReply)
+				if leader.conn != nil {
+					reply.addr = leader.conn.RemoteAddr()
+				} else {
+					reply.addr = self.myAddress()
+				}
+				reply.id = leader.id
+				ctrl.replyChan <- reply
 			}
 		}
 	}
@@ -363,3 +471,4 @@ func (self *Bully) listen(ln net.Listener) {
 		go self.replyHandshake(conn)
 	}
 }
+
