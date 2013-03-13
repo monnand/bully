@@ -192,3 +192,19 @@ func TestSingleBullyElect(t *testing.T) {
 	cleanBullies(bullies)
 }
 
+func TestDoubleBullyElect(t *testing.T) {
+	bullies := buildBullies(8088, 2, t)
+	buildConnections(bullies, t)
+	testSameViewOnBullies(bullies, t)
+	testSameLeader(bullies, t)
+	cleanBullies(bullies)
+}
+
+func TestTripleBullyElect(t *testing.T) {
+	bullies := buildBullies(8088, 3, t)
+	buildConnections(bullies, t)
+	testSameViewOnBullies(bullies, t)
+	testSameLeader(bullies, t)
+	cleanBullies(bullies)
+}
+
