@@ -13,7 +13,7 @@ var argvMyAddress = flag.String("addr", "127.0.0.1:8117", "Public address of thi
 
 func main() {
 	flag.Parse()
-	addr, err := net.ResolveTCPAddr("tcp", *argvMyAddress)
+	myAddr, err := net.ResolveTCPAddr("tcp", *argvMyAddress)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Invalid address %v: %v\n", *argvMyAddress, err)
 		return
@@ -31,6 +31,10 @@ func main() {
 	bindAddr := fmt.Sprintf("0.0.0.0:%v", sa[1])
 
 	fmt.Printf("Bind addr: %v\n", bindAddr)
-	fmt.Printf("Public address: %v\n", addr)
+	fmt.Printf("Public address: %v\n", myAddr)
+
+	bully := NewBully("")
+	web := NewWebAPI(bully)
+	web.Run("127.0.0.1:8080")
 }
 
