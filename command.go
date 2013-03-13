@@ -15,6 +15,9 @@ const (
 	cmdITSME       uint8 = 3
 	cmdBYE         uint8 = 4
 	cmdDUP_CONN    uint8 = 5
+	cmdELECT       uint8 = 6
+	cmdELECT_OK    uint8 = 7
+	cmdCOORDIN     uint8 = 8
 )
 
 type command struct {

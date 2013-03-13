@@ -88,6 +88,12 @@ func (self *Bully) CandidateList() []*Candidate {
 
 func commandCollector(src *big.Int, conn net.Conn, cmdChan chan<- *command, timeout time.Duration) {
 	defer conn.Close()
+	defer func() {
+		cmd := new(command)
+		cmd.src = src
+		cmd.Cmd = cmdBYE
+		cmdChan <- cmd
+	}()
 	for {
 		cmd, err := readCommand(conn)
 		if err != nil {
@@ -137,6 +143,21 @@ func insertNode(l []*node, id *big.Int, conn net.Conn) ([]*node, bool) {
 	n.id = id
 	n.conn = conn
 	return append(l, n), true
+}
+
+func removeNode(l []*node, id *big.Int) []*node {
+	idx := -1
+	for i, n := range l {
+		if n.id.Cmp(id) == 0 {
+			idx = i
+		}
+	}
+	if idx >= 0 {
+		l[idx] = l[len(l) - 1]
+		l[len(l) - 1] = nil
+		l = l[:len(l) - 1]
+	}
+	return l
 }
 
 func findNode(l []*node, id *big.Int) *node {
@@ -254,6 +275,15 @@ func (self *Bully) process() {
 					reply.Cmd = cmdDUP_CONN
 					writeCommand(cmd.replyWriter, reply)
 					cmd.replyWriter.Close()
+				}
+			case cmdBYE:
+				candy = removeNode(candy, cmd.src)
+			case cmdELECT:
+				reply := new(command)
+				reply.Cmd = cmdELECT_OK
+				err := writeCommand(cmd.replyWriter, reply)
+				if err != nil {
+					continue
 				}
 			}
 		case ctrl := <-self.ctrlChan:
