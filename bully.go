@@ -24,6 +24,11 @@ type Bully struct {
 	ctrlChan chan *control
 }
 
+type Candidate struct {
+	Id *big.Int
+	Addr net.Addr
+}
+
 var ErrUnknownError = errors.New("Unknown")
 
 func (self *Bully) AddCandidate(addrStr string, id *big.Int) error {
@@ -47,6 +52,24 @@ func (self *Bully) AddCandidate(addrStr string, id *big.Int) error {
 		return reply.err
 	}
 	return nil
+}
+
+func (self *Bully) CandidateList() []*Candidate {
+	ctrl := new(control)
+	ctrl.cmd = ctrlQUERY_CANDY
+	replyChan := make(chan *controlReply)
+	ctrl.replyChan = replyChan
+
+	self.ctrlChan <- ctrl
+
+	ret := make([]*Candidate, 0, 10)
+	for reply := range replyChan {
+		c := new(Candidate)
+		c.Id = reply.id
+		c.Addr = reply.addr
+		ret = append(ret, c)
+	}
+	return ret
 }
 
 func commandCollector(src *big.Int, conn net.Conn, cmdChan chan<- *command, timeout time.Duration) {
@@ -112,7 +135,8 @@ func findNode(l []*node, id *big.Int) *node {
 
 const (
 	ctrlADD = iota
-	ctrlQUERY
+	ctrlQUERY_LEADER
+	ctrlQUERY_CANDY
 )
 
 type controlReply struct {
@@ -225,6 +249,14 @@ func (self *Bully) process() {
 					continue
 				}
 				ctrl.replyChan <- reply
+			case ctrlQUERY_CANDY:
+				for _, node := range candy {
+					reply := new(controlReply)
+					reply.addr = node.conn.RemoteAddr()
+					reply.id = node.id
+					ctrl.replyChan <- reply
+				}
+				close(ctrl.replyChan)
 			}
 		}
 	}
