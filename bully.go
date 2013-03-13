@@ -331,6 +331,7 @@ func (self *Bully) elect(candy []*node, timeout time.Duration) (leader *node, er
 	// No one is higher than me.
 	// I am the leader.
 	if len(higherCandy) <= 0 {
+		leader = new(node)
 		leader.conn = nil
 		leader.id = self.myId
 		for _, c := range candy {
@@ -380,6 +381,7 @@ func (self *Bully) elect(candy []*node, timeout time.Duration) (leader *node, er
 	// No one replied within time out.
 	// I am the leader.
 	if !slaved {
+		leader = new(node)
 		leader.conn = nil
 		leader.id = self.myId
 		for _, c := range candy {
