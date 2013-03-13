@@ -87,6 +87,26 @@ func testSameViewOnBullies(bullies []*Bully, t *testing.T) {
 	}
 }
 
+func testSameLeader(bullies []*Bully, t *testing.T) {
+	for _, alice := range bullies {
+		for _, bob := range bullies {
+			aliceLeader, err := alice.Leader()
+			if err != nil {
+				t.Errorf("%v\n", err)
+			}
+			bobLeader, err := bob.Leader()
+			if err != nil {
+				t.Errorf("%v\n", err)
+			}
+
+			if aliceLeader.Id.Cmp(bobLeader.Id) != 0 {
+				t.Errorf("%v thinks its leader is %v;\n\tbut %v thinks its leader is %v\n",
+					alice.MyId(), aliceLeader.Id, bob.MyId(), bobLeader.Id)
+			}
+		}
+	}
+}
+
 func cleanBullies(bullies []*Bully) {
 	for _, bully := range bullies {
 		bully.Finalize()
@@ -102,6 +122,13 @@ func TestDoubleBullyAuto(t *testing.T) {
 	fmt.Printf("-------Double Bully Auto Clean-------\n")
 	cleanBullies(bullies)
 	fmt.Printf("-------Double Bully Auto Done-------\n")
+}
+
+func TestSingleBullyAuto(t *testing.T) {
+	bullies := buildBullies(8088, 1, t)
+	buildConnections(bullies, t)
+	testSameViewOnBullies(bullies, t)
+	cleanBullies(bullies)
 }
 
 func TestTripleBullyAuto(t *testing.T) {
@@ -156,3 +183,12 @@ func TestDoubleBully(t *testing.T) {
 	aliceLn.Close()
 	bobLn.Close()
 }
+
+func TestSingleBullyElect(t *testing.T) {
+	bullies := buildBullies(8088, 1, t)
+	buildConnections(bullies, t)
+	testSameViewOnBullies(bullies, t)
+	testSameLeader(bullies, t)
+	cleanBullies(bullies)
+}
+
