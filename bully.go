@@ -446,6 +446,9 @@ func (self *Bully) process() {
 				}
 			case cmdBYE:
 				candy = removeNode(candy, cmd.src)
+				if leader == nil || leader.id == nil || cmd.src.Cmp(leader.id) == 0 {
+					leader = self.electUntilDie(candy, leaderTimeout)
+				}
 			case cmdELECT:
 				reply := new(command)
 				reply.Cmd = cmdELECT_OK

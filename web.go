@@ -31,7 +31,11 @@ func (self *WebAPI) leader(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "Error: %v\r\n", err)
 	}
 	if self.bully.MyId().Cmp(leader.Id) == 0 {
-		fmt.Fprintf(w, "me\r\n")
+		if leader.Addr == nil {
+			fmt.Fprintf(w, "me\r\n")
+		} else {
+			fmt.Fprintf(w, "%v\r\n", leader.Addr)
+		}
 	} else {
 		fmt.Fprintf(w, "%v\r\n", leader.Addr)
 	}
