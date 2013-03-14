@@ -83,7 +83,7 @@ previours leader.
 ### Playing with three nodes
 
 Let's say we want to add one more node into this cluster, whose IP is
-192.168.1.69. Only thing we need to change is to start a new instance of
+192.168.1.69. Only thing we need to do is to start a new instance of
 *bully* on 192.168.1.69 with almost the same command:
 
         bully -port=8117 -nodes="192.168.1.67:8117,192.168.1.68:8117,192.168.1.69:8117" -http=0.0.0.0:8080
@@ -93,8 +93,8 @@ then we need to add it as an initial candidate. **The good part is that you don'
 need to stop the other two instances running on 192.168.1.67 and 192.168.1.68.**
 They will automatically update the candidate list and elect another leader.
 
-Once the new instance started, we can query any of one of the *bully* instance
-about the leader using HTTP:
+Once the new instance started, we can query any of one of them about the leader
+using HTTP:
 
         $ curl http://192.168.1.67:8080/leader
         192.168.1.68
@@ -117,6 +117,8 @@ the rest of the group:
         192.168.1.67
         $ curl http://192.168.1.69:8080/leader
         192.168.1.67
+
+They elected a new leader, which is 192.168.1.67.
 
 If the old leader recovered, then it can join the group again by executing the
 following command:
