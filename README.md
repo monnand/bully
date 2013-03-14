@@ -17,7 +17,7 @@ lot of bandwith on a large cluster.
   and 192.168.1.68, respectively.
 - Run the following command on both machines:
 
-        bully -port=8117 -nodes="192.168.1.67:8117,192.168.1.68:8117" -rest=0.0.0.0:8080
+        bully -port=8117 -nodes="192.168.1.67:8117,192.168.1.68:8117" -http=0.0.0.0:8080
 
 - To know who is the leader, use HTTP to connect one of the machines with path */leader*:
 
@@ -31,12 +31,12 @@ Let's start with a real example. Again, we have two nodes at first, 192.168.1.67
 
 On 192.168.1.67, I first execute the following command:
 
-        bully -port=8117 -nodes="192.168.1.67:8117,192.168.1.68:8117" -rest=0.0.0.0:8080
+        bully -port=8117 -nodes="192.168.1.67:8117,192.168.1.68:8117" -http=0.0.0.0:8080
 
-This command contains three arguments, *port*, *nodes* and *rest*.
+This command contains three arguments, *port*, *nodes* and *http*.
 - *port*: tells *bully* to listen on port 8117 waiting for other candidates'
   connection.
-- *rest*: tells *bully* to set up a web service on port 8080 accepting
+- *http*: tells *bully* to set up a web service on port 8080 accepting
   connections from any client. The client will ask who is the leader using
   HTTP.
 - *nodes*: tells *bully* the address (IP and port) of the initial set of candidates.
@@ -61,7 +61,7 @@ there is only one candidate, and apparently, it is the leader.
 
 Now let's move on to 192.168.1.68 and start another *bully* instance with same command:
 
-        bully -port=8117 -nodes="192.168.1.67:8117,192.168.1.68:8117" -rest=0.0.0.0:8080
+        bully -port=8117 -nodes="192.168.1.67:8117,192.168.1.68:8117" -http=0.0.0.0:8080
 
 Since both candidates specified in *nodes* argument are on-line, there is no more complain.
 
@@ -84,7 +84,7 @@ Let's say we want to add one more node into this cluster, whose IP is
 192.168.1.69. Only thing we need to change is to start a new instance of
 *bully* on 192.168.1.69 with almost the same command:
 
-        bully -port=8117 -nodes="192.168.1.67:8117,192.168.1.68:8117,192.168.1.69:8117" -rest=0.0.0.0:8080
+        bully -port=8117 -nodes="192.168.1.67:8117,192.168.1.68:8117,192.168.1.69:8117" -http=0.0.0.0:8080
 
 The only changed part is the *nodes* parameter. Since we added one more node,
 then we need to add it as an initial candidate. **The good part is that you don't
@@ -108,16 +108,18 @@ This time, the leader is same as previours leader, which is 192.168.1.68.
 What if the leader node crashed? The rest of the candidates will elect a new
 leader on the fly.
 
-Suppose we killed the leader in previours example and ask who is the leader to the rest of the group:
+Suppose we killed the leader in previours example and ask who is the leader to
+the rest of the group:
 
         $ curl http://192.168.1.67:8080/leader
         192.168.1.67
         $ curl http://192.168.1.69:8080/leader
         192.168.1.67
 
-If the old leader recovered, then it can join the group again by executing the following command:
+If the old leader recovered, then it can join the group again by executing the
+following command:
 
-        bully -port=8117 -nodes="192.168.1.67:8117,192.168.1.68:8117,192.168.1.69:8117" -rest=0.0.0.0:8080
+        bully -port=8117 -nodes="192.168.1.67:8117,192.168.1.68:8117,192.168.1.69:8117" -http=0.0.0.0:8080
 
 ## Typical scenario
 

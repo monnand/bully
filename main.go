@@ -11,7 +11,7 @@ import (
 
 var argvPort = flag.Int("port", 8117, "port to listen")
 var argvCandidates = flag.String("nodes", "", "comma separated list of nodes.")
-var argvRestBind = flag.String("rest", "127.0.0.1:8080", "Network address which will be bind to a restful service")
+var argvRestBind = flag.String("http", "127.0.0.1:8080", "Network address which will be bind to a restful service")
 var argvShowPort = flag.Bool("showport", false, "Output the leader's port number (which is only useful for debug purpose)")
 
 func main() {
