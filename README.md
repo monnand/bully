@@ -1,7 +1,7 @@
 bully
 =====
 
-Bully algorithm implemented in Go.
+A leader election program written in [Go](http://golang.org) using [Bully leader election algorithm](http://en.wikipedia.org/wiki/Bully_algorithm).
 
 **NOTE:** This program is indented to be used within LAN among small number of
 nodes. It is vulnerable to be exposed to outside network and it may consumes a
