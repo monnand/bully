@@ -130,12 +130,12 @@ following command:
 The good part of *bully* is that once we decided the set of candidates, we can
 use exactly the same command with same parameters on any candidate node to
 start *bully*. This is very nice because we can use the same virtual machine
-image on the cloud.
+image to start several VMs on the cloud.
 
-Imaging we have a service need a node to do some management. Such work may not
-be heavy but critical. So we need to have some backup servers in case of the
-manager node down. Normally, 3 or 5 node will be enough. Since all nodes are
-same, we need to select a leader node to do the job, let others running and
-wait the leader die. Then we can use *bully* here to decide who is the leader,
-and elect another leader when the old one down or new one comes.
+Imaging we have a service needs a node to do some management work. Such work
+may not be heavy but critical. So we need to have some backup servers in case
+of the manager down. Normally, 3 or 5 node will be enough. Since all nodes are
+same, we need to select a leader node to do the job, let others keep running
+and wait the leader die. In this case, we can use *bully* to decide who is the
+leader, and elect another leader when the old one down or new one comes.
 
