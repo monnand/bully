@@ -471,12 +471,16 @@ func (self *Bully) process() {
 			switch ctrl.cmd {
 			case ctrlADD:
 				var err error
+				oldCandyLen := len(candy)
 				candy, err = self.handshake(ctrl.addr, ctrl.id, candy, ctrl.timeout)
 				reply := new(controlReply)
 				if err != nil {
 					reply.err = err
 					ctrl.replyChan <- reply
 					continue
+				}
+				if len(candy) > oldCandyLen {
+					leader = self.electUntilDie(candy, leaderTimeout)
 				}
 				ctrl.replyChan <- reply
 			case ctrlQUERY_CANDY:
