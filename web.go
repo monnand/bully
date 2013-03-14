@@ -49,7 +49,6 @@ func (self *WebAPI) leader(w http.ResponseWriter, r *http.Request) {
 		ae := strings.Split(leaderAddr, ":")
 		if len(ae) > 1 {
 			leaderAddr = strings.Join(ae[:len(ae) - 1], ":")
-			return
 		}
 	}
 	fmt.Fprintf(w, "%v\r\n", leaderAddr)

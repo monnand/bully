@@ -25,6 +25,8 @@ lot of bandwith on a large cluster.
 
 ## Real example
 
+### Starting from a single node
+
 Let's start with a real example. Again, we have two nodes at first, 192.168.1.67 and 192.168.1.68
 
 On 192.168.1.67, I first execute the following commands:
