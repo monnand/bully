@@ -23,7 +23,7 @@ lot of bandwith on a large cluster.
 
         curl http://192.168.1.67:8080/leader
 
-## Real example
+## A real example
 
 ### Starting from a single node
 
@@ -103,4 +103,33 @@ about the leader using HTTP:
 
 This time, the leader is same as previours leader, which is 192.168.1.68.
 
+### Killing the leader
+
+What if the leader node crashed? The rest of the candidates will elect a new
+leader on the fly.
+
+Suppose we killed the leader in previours example and ask who is the leader to the rest of the group:
+
+        $ curl http://192.168.1.67:8080/leader
+        192.168.1.67
+        $ curl http://192.168.1.69:8080/leader
+        192.168.1.67
+
+If the old leader recovered, then it can join the group again by executing the following command:
+
+        bully -port=8117 -nodes="192.168.1.67:8117,192.168.1.68:8117,192.168.1.69:8117" -rest=0.0.0.0:8080
+
+## Typical scenario
+
+The good part of *bully* is that once we decided the set of candidates, we can
+use exactly the same command with same parameters on any candidate node to
+start *bully*. This is very nice because we can use the same virtual machine
+image on the cloud.
+
+Imaging we have a service need a node to do some management. Such work may not
+be heavy but critical. So we need to have some backup servers in case of the
+manager node down. Normally, 3 or 5 node will be enough. Since all nodes are
+same, we need to select a leader node to do the job, let others running and
+wait the leader die. Then we can use *bully* here to decide who is the leader,
+and elect another leader when the old one down or new one comes.
 
