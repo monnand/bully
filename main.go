@@ -16,7 +16,6 @@ var argvRestBind = flag.String("rest", "127.0.0.1:8080", "Network address which 
 func main() {
 	flag.Parse()
 	bindAddr := fmt.Sprintf("0.0.0.0:%v", *argvPort)
-	fmt.Printf("Bind addr: %v\n", bindAddr)
 
 	ln, err := net.Listen("tcp", bindAddr)
 	if err != nil {
@@ -35,7 +34,10 @@ func main() {
 		}
 	}
 
+	fmt.Printf("My ID: %v\n", bully.MyId())
+
 	web := NewWebAPI(bully)
 	web.Run(*argvRestBind)
+	bully.Finalize()
 }
 
