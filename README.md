@@ -1,11 +1,13 @@
 bully
 =====
 
-A leader election program written in [Go](http://golang.org)(golang) using [Bully leader election algorithm](http://en.wikipedia.org/wiki/Bully_algorithm).
+A leader election program written in [Go](http://golang.org)(golang) using
+[Bully leader election
+algorithm](http://en.wikipedia.org/wiki/Bully_algorithm).
 
 **NOTE:** This program is indented to be used within LAN among small number of
-nodes. It is vulnerable to be exposed to outside network and it may consumes a
-lot of bandwith on a large cluster.
+nodes. It is vulnerable to attack if it is exposed to outside network and it
+may consume a lot of bandwith on a large cluster.
 
 ## Quick start
 
