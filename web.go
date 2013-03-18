@@ -25,8 +25,9 @@ import (
 )
 
 type WebAPI struct {
-	bully *Bully
+	bully    *Bully
 	showPort bool
+	unixTime bool
 }
 
 const (
@@ -34,10 +35,11 @@ const (
 	getLeader    = "/leader"
 )
 
-func NewWebAPI(bully *Bully, showPort bool) *WebAPI {
+func NewWebAPI(bully *Bully, showPort, unixTime bool) *WebAPI {
 	ret := new(WebAPI)
 	ret.bully = bully
 	ret.showPort = showPort
+	ret.unixTime = unixTime
 	return ret
 }
 
@@ -53,8 +55,7 @@ func (self *WebAPI) leader(w http.ResponseWriter, r *http.Request) {
 	var leaderAddr string
 	if self.bully.MyId().Cmp(leader.Id) == 0 {
 		if len(leader.Addr) == 0 {
-			fmt.Fprintf(w, "me\r\n%v\r\n", timestamp)
-			return
+			leaderAddr = self.bully.MyAddr().String()
 		} else {
 			leaderAddr = leader.Addr
 		}
@@ -65,10 +66,14 @@ func (self *WebAPI) leader(w http.ResponseWriter, r *http.Request) {
 	if !self.showPort {
 		ae := strings.Split(leaderAddr, ":")
 		if len(ae) > 1 {
-			leaderAddr = strings.Join(ae[:len(ae) - 1], ":")
+			leaderAddr = strings.Join(ae[:len(ae)-1], ":")
 		}
 	}
-	fmt.Fprintf(w, "%v\r\n%v\r\n", leaderAddr, timestamp)
+	if self.unixTime {
+		fmt.Fprintf(w, "%v\r\n%v\r\n", leaderAddr, timestamp.Unix())
+	} else {
+		fmt.Fprintf(w, "%v\r\n%v\r\n", leaderAddr, timestamp)
+	}
 }
 
 func (self *WebAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -90,4 +95,3 @@ func (self *WebAPI) Run(addr string) {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 	}
 }
-

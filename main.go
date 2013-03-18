@@ -30,6 +30,7 @@ var argvPort = flag.Int("port", 8117, "port to listen")
 var argvCandidates = flag.String("nodes", "", "comma separated list of nodes.")
 var argvRestBind = flag.String("http", "127.0.0.1:8080", "Network address which will be bind to a restful service")
 var argvShowPort = flag.Bool("showport", false, "Output the leader's port number (which is only useful for debug purpose)")
+var argvUnixTime = flag.Bool("unixTime", true, "Show the timestamp in unix time")
 
 func main() {
 	flag.Parse()
@@ -55,7 +56,7 @@ func main() {
 
 	fmt.Printf("My ID: %v\n", bully.MyId())
 
-	web := NewWebAPI(bully, *argvShowPort)
+	web := NewWebAPI(bully, *argvShowPort, *argvUnixTime)
 	web.Run(*argvRestBind)
 	bully.Finalize()
 }
