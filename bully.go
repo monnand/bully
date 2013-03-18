@@ -112,7 +112,7 @@ func (self *Bully) CandidateList() []*Candidate {
 	return ret
 }
 
-func (self *Bully) Leader() (cand *Candidate, err error) {
+func (self *Bully) Leader() (cand *Candidate, timestamp time.Time, err error) {
 	ctrl := new(control)
 	ctrl.cmd = ctrlQUERY_LEADER
 	replyChan := make(chan *controlReply)
@@ -135,6 +135,7 @@ func (self *Bully) Leader() (cand *Candidate, err error) {
 	cand = new(Candidate)
 	cand.Addr = reply.addr
 	cand.Id = reply.id
+	timestamp = reply.timestamp
 	return
 }
 
@@ -290,6 +291,7 @@ const (
 type controlReply struct {
 	addr string
 	id   *big.Int
+	timestamp time.Time
 	err  error
 }
 
@@ -578,6 +580,7 @@ func (self *Bully) process() {
 	candy := make([]*node, 0, 10)
 	var leader *node
 	leaderTimeout := 10 * time.Second
+	var leaderTimeStamp time.Time
 	for {
 		select {
 		case cmd := <-self.cmdChan:
@@ -631,6 +634,7 @@ func (self *Bully) process() {
 				candy = removeNode(candy, cmd.src)
 				if leader == nil || leader.id == nil || cmd.src.Cmp(leader.id) == 0 {
 					candy, leader = self.electUntilDie(candy, leaderTimeout)
+					leaderTimeStamp = time.Now()
 				}
 			case cmdELECT:
 				reply := new(command)
@@ -641,14 +645,17 @@ func (self *Bully) process() {
 				}
 				fmt.Printf("[ELECT] I (%v) received election from %v \n", self.myId, cmd.src)
 				candy, leader = self.electUntilDie(candy, leaderTimeout)
+				leaderTimeStamp = time.Now()
 				fmt.Printf("[ELECT] I (%v) received election from %v; and the leader is %v(%v) \n", self.myId, cmd.src, leader.caAddr, leader.id)
 			case cmdCOORDIN:
 				n := findNode(candy, cmd.src)
 				fmt.Printf("[ELECT-RESULT] I (%v) received election result from %v and he is the leader\n", self.myId, cmd.src)
 				if n == nil {
 					candy, leader = self.electUntilDie(candy, leaderTimeout)
+					leaderTimeStamp = time.Now()
 				} else if n.id.Cmp(self.myId) < 0 {
 					candy, leader = self.electUntilDie(candy, leaderTimeout)
+					leaderTimeStamp = time.Now()
 				} else {
 					leader = n
 				}
@@ -672,6 +679,7 @@ func (self *Bully) process() {
 				if len(candy) > oldCandyLen || leader == nil {
 					fmt.Printf("[NEED ELECTION] I (%v) have added %v. Now my candy list contains: %v\n", self.myId, ctrl.addr, candyToString(candy))
 					candy, leader = self.electUntilDie(candy, leaderTimeout)
+					leaderTimeStamp = time.Now()
 					fmt.Printf("[ELECT] I (%v) initiated the election and the leader is: %v(%v) \n", self.myId, leader.caAddr, leader.id)
 				}
 				fmt.Printf("[ADDAFTER] I (%v) have added %v. Now my candy list contains: %v; and the leader is %v(%v)\n", self.myId, ctrl.addr, candyToString(candy), leader.caAddr, leader.id)
@@ -692,6 +700,7 @@ func (self *Bully) process() {
 				if leader == nil {
 					fmt.Printf("[QUERY SO NEED ELECTION] My (%v) candy list contains: %v\n", self.myId, candyToString(candy))
 					candy, leader = self.electUntilDie(candy, leaderTimeout)
+					leaderTimeStamp = time.Now()
 				}
 				reply := new(controlReply)
 				if leader.conn != nil {
@@ -699,6 +708,7 @@ func (self *Bully) process() {
 				} else {
 					reply.addr = self.MyAddr().String()
 				}
+				reply.timestamp = leaderTimeStamp
 				reply.id = leader.id
 				ctrl.replyChan <- reply
 			case ctrlQUIT:

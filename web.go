@@ -46,14 +46,14 @@ func (self *WebAPI) join(w http.ResponseWriter, r *http.Request) {
 }
 
 func (self *WebAPI) leader(w http.ResponseWriter, r *http.Request) {
-	leader, err := self.bully.Leader()
+	leader, timestamp, err := self.bully.Leader()
 	if err != nil {
 		fmt.Fprint(w, "Error: %v\r\n", err)
 	}
 	var leaderAddr string
 	if self.bully.MyId().Cmp(leader.Id) == 0 {
 		if len(leader.Addr) == 0 {
-			fmt.Fprintf(w, "me\r\n")
+			fmt.Fprintf(w, "me\r\n%v\r\n", timestamp)
 			return
 		} else {
 			leaderAddr = leader.Addr
@@ -68,7 +68,7 @@ func (self *WebAPI) leader(w http.ResponseWriter, r *http.Request) {
 			leaderAddr = strings.Join(ae[:len(ae) - 1], ":")
 		}
 	}
-	fmt.Fprintf(w, "%v\r\n", leaderAddr)
+	fmt.Fprintf(w, "%v\r\n%v\r\n", leaderAddr, timestamp)
 }
 
 func (self *WebAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {

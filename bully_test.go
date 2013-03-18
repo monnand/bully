@@ -104,11 +104,11 @@ func testSameLeader(bullies []*Bully, t *testing.T) {
 	for _, alice := range bullies {
 		fmt.Println("&&&&&&&&&&&&&&&&&&&&&")
 		for _, bob := range bullies {
-			aliceLeader, err := alice.Leader()
+			aliceLeader, _, err := alice.Leader()
 			if err != nil {
 				t.Errorf("%v\n", err)
 			}
-			bobLeader, err := bob.Leader()
+			bobLeader, _, err := bob.Leader()
 			if err != nil {
 				t.Errorf("%v\n", err)
 			}
