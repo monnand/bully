@@ -100,7 +100,9 @@ func testSameViewOnBullies(bullies []*Bully, t *testing.T) {
 }
 
 func testSameLeader(bullies []*Bully, t *testing.T) {
+	fmt.Println("------------test leader---------")
 	for _, alice := range bullies {
+		fmt.Println("&&&&&&&&&&&&&&&&&&&&&")
 		for _, bob := range bullies {
 			aliceLeader, err := alice.Leader()
 			if err != nil {
@@ -116,6 +118,7 @@ func testSameLeader(bullies []*Bully, t *testing.T) {
 					alice.MyId(), aliceLeader.Id, bob.MyId(), bobLeader.Id)
 			}
 		}
+		fmt.Println("&&&&&&&&&&&&&&&&&&&&&")
 	}
 }
 
@@ -173,6 +176,7 @@ func Test4BullyElect(t *testing.T) {
 	buildConnections(bullies, t)
 	testSameViewOnBullies(bullies, t)
 	testSameLeader(bullies, t)
+	fmt.Println("-------------------*------------------")
 	cleanBullies(bullies)
 	fmt.Println("-------------------#------------------")
 }
