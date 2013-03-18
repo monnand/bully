@@ -722,6 +722,7 @@ func (self *Bully) process() {
 				}
 				fmt.Printf("[BYEDONE] I (%v) will never take a little piece of cloud\n88888888888888\n", self.myId)
 				close(ctrl.replyChan)
+				return
 			}
 		}
 	}
