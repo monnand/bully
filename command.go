@@ -38,6 +38,7 @@ const (
 	cmdTRY_LATER   uint8 = 9
 	cmdDUP_EXIT    uint8 = 10
 	cmdCANDY_LIST  uint8 = 11
+	cmdCANDY_REPLY uint8 = 11
 )
 
 type command struct {

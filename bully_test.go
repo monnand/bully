@@ -40,14 +40,30 @@ func buildBullies(startPort, N int, t *testing.T) []*Bully {
 	return ret
 }
 
+func printCandies(bullies []*Bully) {
+	for _, alice := range bullies {
+		fmt.Printf("[LISTCANDYLIST] %v:\n", alice.localhost())
+		aliceCandy := alice.CandidateList()
+		for _, c := range aliceCandy {
+			fmt.Printf("\t%v\n", c.Addr)
+		}
+	}
+}
+
 func buildConnections(bullies []*Bully, t *testing.T) {
 	for _, alice := range bullies {
+		fmt.Println("++++++++++++++++")
 		for _, bob := range bullies {
+			fmt.Printf("[TEST] Ask %v to add %v\n", alice.localhost(), bob.localhost())
 			err := alice.AddCandidate(bob.localhost().String(), nil, 3*time.Second)
 			if err != nil {
 				t.Errorf("%v\n", err)
 			}
+			fmt.Printf("[TEST] %v has added%v\n", alice.localhost(), bob.localhost())
+			printCandies(bullies)
+			fmt.Println("#############")
 		}
+		fmt.Println("++++++++++++++++")
 	}
 }
 
@@ -109,50 +125,43 @@ func cleanBullies(bullies []*Bully) {
 	}
 }
 
-func TestDoubleBullyAuto(t *testing.T) {
-	bullies := buildBullies(8088, 2, t)
-	buildConnections(bullies, t)
-	testSameViewOnBullies(bullies, t)
-	cleanBullies(bullies)
-}
-
-func TestSingleBullyAuto(t *testing.T) {
-	bullies := buildBullies(8088, 1, t)
-	buildConnections(bullies, t)
-	testSameViewOnBullies(bullies, t)
-	cleanBullies(bullies)
-}
-
-func TestTripleBullyAuto(t *testing.T) {
-	bullies := buildBullies(8088, 3, t)
-	buildConnections(bullies, t)
-	testSameViewOnBullies(bullies, t)
-	cleanBullies(bullies)
-}
-
-
 func TestSingleBullyElect(t *testing.T) {
+	fmt.Println("-------------------1------------------")
 	bullies := buildBullies(8088, 1, t)
+	for _, b := range bullies {
+		fmt.Printf("bully: %v on addr %v\n", b.MyId(), b.MyAddr())
+	}
 	buildConnections(bullies, t)
 	testSameViewOnBullies(bullies, t)
 	testSameLeader(bullies, t)
 	cleanBullies(bullies)
+	fmt.Println("-------------------#------------------")
 }
 
 func TestDoubleBullyElect(t *testing.T) {
+	fmt.Println("-------------------2------------------")
 	bullies := buildBullies(8088, 2, t)
+	for _, b := range bullies {
+		fmt.Printf("bully: %v on addr %v\n", b.MyId(), b.MyAddr())
+	}
 	buildConnections(bullies, t)
 	testSameViewOnBullies(bullies, t)
 	testSameLeader(bullies, t)
 	cleanBullies(bullies)
+	fmt.Println("-------------------#------------------")
 }
 
 func TestTripleBullyElect(t *testing.T) {
+	fmt.Println("-------------------3------------------")
 	bullies := buildBullies(8088, 3, t)
+	for _, b := range bullies {
+		fmt.Printf("bully: %v on addr %v\n", b.MyId(), b.MyAddr())
+	}
 	buildConnections(bullies, t)
 	testSameViewOnBullies(bullies, t)
 	testSameLeader(bullies, t)
 	cleanBullies(bullies)
+	fmt.Println("-------------------#------------------")
 }
 
 func Test4BullyElect(t *testing.T) {
@@ -165,6 +174,6 @@ func Test4BullyElect(t *testing.T) {
 	testSameViewOnBullies(bullies, t)
 	testSameLeader(bullies, t)
 	cleanBullies(bullies)
-	fmt.Println("-------------------4------------------")
+	fmt.Println("-------------------#------------------")
 }
 
