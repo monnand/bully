@@ -434,8 +434,10 @@ var ErrNeedNewElection = errors.New("Need another round")
 
 func (self *Bully) elect(candy []*node, timeout time.Duration) (leader *node, err error) {
 	higherCandy := make([]*node, 0, len(candy))
+	fmt.Printf("[ELECT TMP] my (%v) candy list %v\n", self.myId, candyToString(candy))
 	for _, c := range candy {
 		if c.id.Cmp(self.myId) > 0 {
+			fmt.Printf("[ELECT TMP] I (%v) send elect message to %v\n", self.myId, c.id)
 			cmd := new(command)
 			cmd.Cmd = cmdELECT
 			err := writeCommand(c.conn, cmd)
@@ -448,6 +450,7 @@ func (self *Bully) elect(candy []*node, timeout time.Duration) (leader *node, er
 	// No one is higher than me.
 	// I am the leader.
 	if len(higherCandy) <= 0 {
+		fmt.Printf("[ELECT RESULT] I (%v) am the leader\n", self.myId)
 		leader = new(node)
 		leader.conn = nil
 		leader.id = self.myId
@@ -472,6 +475,7 @@ func (self *Bully) elect(candy []*node, timeout time.Duration) (leader *node, er
 				reply.Cmd = cmdELECT_OK
 				writeCommand(cmd.replyWriter, reply)
 			case cmdELECT_OK:
+				fmt.Printf("[ELECT TMP] I (%v) received reply from %v\n", self.myId, cmd.src)
 				n := findNode(higherCandy, cmd.src)
 				if n == nil {
 					continue
@@ -479,6 +483,7 @@ func (self *Bully) elect(candy []*node, timeout time.Duration) (leader *node, er
 				slaved = true
 			case cmdCOORDIN:
 				n := findNode(candy, cmd.src)
+				fmt.Printf("[ELECT RESULT] %v is the leader\n", cmd.src)
 				if n == nil {
 					err = ErrNeedNewElection
 					return
@@ -501,6 +506,7 @@ func (self *Bully) elect(candy []*node, timeout time.Duration) (leader *node, er
 		leader = new(node)
 		leader.conn = nil
 		leader.id = self.myId
+		fmt.Printf("[ELECT RESULT] I (%v) am the leader\n", self.myId)
 		for _, c := range candy {
 			cmd := new(command)
 			cmd.Cmd = cmdCOORDIN
@@ -658,6 +664,7 @@ func (self *Bully) process() {
 				}
 				fmt.Printf("[ADDAFTER] I (%v) have added %v. Now my candy list contains: %v\n", self.myId, ctrl.addr, candyToString(candy))
 				if len(candy) > oldCandyLen {
+					fmt.Printf("[NEED ELECTION] I (%v) have added %v. Now my candy list contains: %v\n", self.myId, ctrl.addr, candyToString(candy))
 					leader = self.electUntilDie(candy, leaderTimeout)
 					fmt.Printf("[ELECT] I (%v) initiated the election and the leader is: %v(%v) \n", self.myId, leader.caAddr, leader.id)
 				}
@@ -676,6 +683,7 @@ func (self *Bully) process() {
 				close(ctrl.replyChan)
 			case ctrlQUERY_LEADER:
 				if leader == nil {
+					fmt.Printf("[QUERY SO NEED ELECTION] My (%v) candy list contains: %v\n", self.myId, candyToString(candy))
 					leader = self.electUntilDie(candy, leaderTimeout)
 				}
 				reply := new(controlReply)
