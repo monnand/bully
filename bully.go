@@ -22,9 +22,11 @@ import (
 	"errors"
 	"fmt"
 	"github.com/nu7hatch/gouuid"
+	"labix.org/v2/mgo/bson"
 	"math/big"
 	"net"
 	"strings"
+	"strconv"
 	"time"
 )
 
@@ -47,7 +49,7 @@ type Bully struct {
 
 type Candidate struct {
 	Id   *big.Int
-	Addr net.Addr
+	Addr string
 }
 
 var ErrUnknownError = errors.New("Unknown")
@@ -75,7 +77,7 @@ func (self *Bully) AddCandidate(addrStr string, id *big.Int, timeout time.Durati
 		timeout = 2 * time.Second
 	}
 	ctrl := new(control)
-	ctrl.addr = addr
+	ctrl.addr = addrStr
 	ctrl.id = id
 	ctrl.cmd = ctrlADD
 	ctrl.timeout = timeout
@@ -127,7 +129,7 @@ func (self *Bully) Leader() (cand *Candidate, err error) {
 		err = reply.err
 		return
 	}
-	if reply.addr == nil || reply.id == nil {
+	if len(reply.addr) == 0 || reply.id == nil {
 		err = ErrUnknownError
 		return
 	}
@@ -203,9 +205,10 @@ func NewBully(ln net.Listener, myId *big.Int) *Bully {
 type node struct {
 	id   *big.Int
 	conn net.Conn
+	caAddr string
 }
 
-func insertNode(l []*node, id *big.Int, conn net.Conn) ([]*node, bool) {
+func insertNode(l []*node, id *big.Int, conn net.Conn, caAddr string) ([]*node, bool) {
 	n := findNode(l, id)
 	if nil != n {
 		return l, false
@@ -213,7 +216,26 @@ func insertNode(l []*node, id *big.Int, conn net.Conn) ([]*node, bool) {
 	n = new(node)
 	n.id = id
 	n.conn = conn
+	n.caAddr = caAddr
 	return append(l, n), true
+}
+
+func dumpAllAddr(l []*node) []byte {
+	addr := make([]string, 0, len(l))
+	for _, n := range l {
+		addr = append(addr, n.caAddr)
+	}
+	ret, _ := bson.Marshal(addr)
+	return ret
+}
+
+func loadAllAddr(data []byte) []string {
+	ret := make([]string, 0, 10)
+	err := bson.Unmarshal(data, &ret)
+	if err != nil {
+		return nil
+	}
+	return ret
 }
 
 func removeNode(l []*node, id *big.Int) []*node {
@@ -229,6 +251,15 @@ func removeNode(l []*node, id *big.Int) []*node {
 		l = l[:len(l)-1]
 	}
 	return l
+}
+
+func findNodeByAddr(l []*node, addr string) *node {
+	for _, n := range l {
+		if n.caAddr == addr {
+			return n
+		}
+	}
+	return nil
 }
 
 func findNode(l []*node, id *big.Int) *node {
@@ -248,14 +279,14 @@ const (
 )
 
 type controlReply struct {
-	addr net.Addr
+	addr string
 	id   *big.Int
 	err  error
 }
 
 type control struct {
 	cmd       int
-	addr      net.Addr
+	addr      string
 	id        *big.Int
 	timeout   time.Duration
 	replyChan chan<- *controlReply
@@ -265,67 +296,100 @@ var ErrUnmatchedId = errors.New("Unmatched node id")
 var ErrTryLater = errors.New("Try it later")
 var ErrBadProtoImpl = errors.New("Bad protocol implementation")
 
-func (self *Bully) handshake(addr net.Addr, id *big.Int, candy []*node, timeout time.Duration) ([]*node, error) {
+func (self *Bully) myport() int {
+	addrStr := self.ln.Addr().String()
+	ae := strings.Split(addrStr, ":")
+	ret, _ := strconv.Atoi(ae[len(ae) - 1])
+	return ret
+}
+
+func (self *Bully) handshake(addr string, id *big.Int, candy []*node, timeout time.Duration) ([]*node, []string, error) {
 	if id != nil {
 		cmp := id.Cmp(self.myId)
 		if cmp > 0 {
 			n := findNode(candy, id)
 			if n != nil {
-				return candy, nil
+				return candy, nil, nil
 			}
 		} else if cmp < 0 {
 			// If we know the id of a node,
 			// then we only connect to the nodes with higher id,
 			// and let the nodes with lower id connect us.
-			return candy, nil
+			return candy, nil, nil
 		} else {
 			// It is ourselves, don't need to add it.
-			return candy, nil
+			return candy, nil, nil
 		}
 	}
-	conn, err := net.DialTimeout("tcp", addr.String(), timeout)
+	conn, err := net.DialTimeout("tcp", addr, timeout)
 	if err != nil {
-		return candy, err
+		return candy, nil, err
 	}
 	cmd := new(command)
 	cmd.Cmd = cmdHELLO
+	cmd.Header = make(map[string]string, 1)
+	cmd.Header["port"] = fmt.Sprintf("%v", self.myport())
 	cmd.Body = self.myId.Bytes()
 	err = writeCommand(conn, cmd)
 	if err != nil {
-		return candy, err
+		return candy, nil, err
 	}
 	reply, err := readCommand(conn)
 	if err != nil {
-		return candy, err
+		return candy, nil, err
 	}
 	if reply.Cmd != cmdHELLO_REPLY {
 		switch reply.Cmd {
 		case cmdTRY_LATER:
 			conn.Close()
-			return candy, ErrTryLater
+			return candy, nil, ErrTryLater
 		case cmdDUP_CONN:
 			reply := new(command)
 			reply.Cmd = cmdDUP_EXIT
 			writeCommand(conn, reply)
 			conn.Close()
-			return candy, nil
+			return candy, nil, nil
 		case cmdITSME:
-			self.myAddr = addr
+			self.myAddr, _ = net.ResolveTCPAddr("tcp", addr)
 			conn.Close()
-			return candy, nil
+			return candy, nil, nil
 		}
-		return candy, ErrBadProtoImpl
+		return candy, nil, ErrBadProtoImpl
 	}
 	rId := new(big.Int).SetBytes(reply.Body)
 	if id != nil {
 		if rId.Cmp(id) != 0 {
-			return candy, ErrUnmatchedId
+			return candy, nil, ErrUnmatchedId
 		}
 	}
-	candy, _ = insertNode(candy, rId, conn)
+	reply, err = readCommand(conn)
+	if err != nil {
+		return candy, nil, err
+	}
+	if reply.Cmd != cmdCANDY_LIST {
+		switch reply.Cmd {
+		case cmdTRY_LATER:
+			conn.Close()
+			return candy, nil, ErrTryLater
+		}
+		return candy, nil, ErrBadProtoImpl
+	}
+	if len(reply.Body) == 0 {
+		return candy, nil, ErrBadProtoImpl
+	}
+	candyList := loadAllAddr(reply.Body)
+	moreCandy := make([]string, 0, len(candyList))
+	for _, c := range candyList {
+		n := findNodeByAddr(candy, c)
+		if n == nil {
+			moreCandy = append(moreCandy, c)
+		}
+	}
+
+	candy, _ = insertNode(candy, rId, conn, addr)
 	go commandCollector(rId, conn, self.cmdChan, 10*time.Second)
 
-	return candy, nil
+	return candy, moreCandy, nil
 }
 
 func (self *Bully) electUntilDie(candy []*node, timeout time.Duration) *node {
@@ -419,6 +483,14 @@ func (self *Bully) elect(candy []*node, timeout time.Duration) (leader *node, er
 	return
 }
 
+func getIp(addr string) string {
+	ae := strings.Split(addr, ":")
+	if len(ae) == 0 {
+		return ""
+	}
+	return strings.Join(ae[:len(ae) - 1], ":")
+}
+
 func (self *Bully) localhost() net.Addr {
 	addrStr := self.ln.Addr().String()
 	ae := strings.Split(addrStr, ":")
@@ -447,7 +519,16 @@ func (self *Bully) process() {
 				}
 				n := findNode(candy, cmd.src)
 				if n == nil {
+					caAddr := ""
+					if port, ok := cmd.Header["port"]; ok {
+						caAddr = fmt.Sprintf("%v:%v", getIp(cmd.replyWriter.RemoteAddr().String()), port)
+					}
 					reply := new(command)
+					if len(caAddr) == 0 {
+						reply.Cmd = cmdBYE
+						writeCommand(cmd.replyWriter, reply)
+						continue
+					}
 					reply.Cmd = cmdHELLO_REPLY
 					reply.Body = self.myId.Bytes()
 					err := writeCommand(cmd.replyWriter, reply)
@@ -455,7 +536,14 @@ func (self *Bully) process() {
 						cmd.replyWriter.Close()
 						continue
 					}
-					candy, _ = insertNode(candy, cmd.src, cmd.replyWriter)
+					reply.Cmd = cmdCANDY_LIST
+					reply.Body = dumpAllAddr(candy)
+					err = writeCommand(cmd.replyWriter, reply)
+					if err != nil {
+						cmd.replyWriter.Close()
+						continue
+					}
+					candy, _ = insertNode(candy, cmd.src, cmd.replyWriter, caAddr)
 				} else {
 					reply := new(command)
 					reply.Cmd = cmdDUP_CONN
@@ -489,7 +577,25 @@ func (self *Bully) process() {
 			case ctrlADD:
 				var err error
 				oldCandyLen := len(candy)
-				candy, err = self.handshake(ctrl.addr, ctrl.id, candy, ctrl.timeout)
+				candyList := make([]string, 1, 10)
+				candyList[0] = ctrl.addr
+				newCandies := make([]string, 0, 10)
+
+				for len(candyList) > 0 {
+					for _, c := range candyList {
+						var l []string
+						candy, l, err = self.handshake(c, nil, candy, ctrl.timeout)
+						for _, i := range l {
+							newCandies = append(newCandies, i)
+						}
+						if err == ErrTryLater {
+							newCandies = append(newCandies, c)
+						}
+					}
+					candyList = newCandies
+					newCandies = candyList[:0]
+				}
+
 				reply := new(controlReply)
 				if err != nil {
 					reply.err = err
@@ -502,12 +608,12 @@ func (self *Bully) process() {
 				ctrl.replyChan <- reply
 			case ctrlQUERY_CANDY:
 				reply := new(controlReply)
-				reply.addr = self.MyAddr()
+				reply.addr = self.MyAddr().String()
 				reply.id = self.myId
 				ctrl.replyChan <- reply
 				for _, node := range candy {
 					reply := new(controlReply)
-					reply.addr = node.conn.RemoteAddr()
+					reply.addr = node.caAddr
 					reply.id = node.id
 					ctrl.replyChan <- reply
 				}
@@ -518,9 +624,9 @@ func (self *Bully) process() {
 				}
 				reply := new(controlReply)
 				if leader.conn != nil {
-					reply.addr = leader.conn.RemoteAddr()
+					reply.addr = leader.conn.RemoteAddr().String()
 				} else {
-					reply.addr = self.MyAddr()
+					reply.addr = self.MyAddr().String()
 				}
 				reply.id = leader.id
 				ctrl.replyChan <- reply
@@ -546,7 +652,7 @@ func (self *Bully) replyHandshake(conn net.Conn) {
 		conn.Close()
 		return
 	}
-	if len(cmd.Body) == 0 {
+	if len(cmd.Header) == 0 || len(cmd.Body) == 0 {
 		conn.Close()
 		return
 	}

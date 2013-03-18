@@ -52,14 +52,14 @@ func (self *WebAPI) leader(w http.ResponseWriter, r *http.Request) {
 	}
 	var leaderAddr string
 	if self.bully.MyId().Cmp(leader.Id) == 0 {
-		if leader.Addr == nil {
+		if len(leader.Addr) == 0 {
 			fmt.Fprintf(w, "me\r\n")
 			return
 		} else {
-			leaderAddr = leader.Addr.String()
+			leaderAddr = leader.Addr
 		}
 	} else {
-		leaderAddr = leader.Addr.String()
+		leaderAddr = leader.Addr
 	}
 
 	if !self.showPort {
