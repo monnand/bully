@@ -41,6 +41,7 @@ func main() {
 		return
 	}
 	bully := NewBully(ln, nil)
+	defer bully.Finalize()
 
 	nodeAddr := strings.Split(*argvCandidates, ",")
 	dialTimtout := 5 * time.Second
