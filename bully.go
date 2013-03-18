@@ -386,6 +386,8 @@ func (self *Bully) handshake(addr string, id *big.Int, candy []*node, timeout ti
 		}
 	}
 
+	fmt.Printf("I (%v) have shaked hand with %v (%v), he asked me to shake hands with %v\n", self.myId, addr, rId, moreCandy)
+
 	candy, _ = insertNode(candy, rId, conn, addr)
 	go commandCollector(rId, conn, self.cmdChan, 10*time.Second)
 
