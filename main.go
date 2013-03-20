@@ -48,6 +48,9 @@ func main() {
 	dialTimtout := 5 * time.Second
 
 	for _, node := range nodeAddr {
+		if len(node) == 0 {
+			continue
+		}
 		err := bully.AddCandidate(node, nil, dialTimtout)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v cannot be added: %v\n", node, err)
