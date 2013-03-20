@@ -195,3 +195,17 @@ func Test5BullyElect(t *testing.T) {
 	fmt.Println("-------------------#------------------")
 }
 
+func Test7BullyElect(t *testing.T) {
+	fmt.Println("-------------------7------------------")
+	bullies := buildBullies(8088, 7, t)
+	for _, b := range bullies {
+		fmt.Printf("bully: %v on addr %v\n", b.MyId(), b.MyAddr())
+	}
+	buildConnections(bullies, t)
+	testSameViewOnBullies(bullies, t)
+	testSameLeader(bullies, t)
+	fmt.Println("-------------------*------------------")
+	cleanBullies(bullies)
+	fmt.Println("-------------------#------------------")
+}
+
