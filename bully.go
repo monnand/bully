@@ -58,11 +58,11 @@ func (self *Bully) MyId() *big.Int {
 	return self.myId
 }
 
-func (self *Bully) MyAddr() net.Addr {
-	if self.myAddr != nil {
-		return self.myAddr
+func (self *Bully) MyAddr() string {
+	if len(self.myCAAddr) == 0 {
+		return fmt.Sprintf("localhost:%v", self.myport())
 	}
-	return self.localhost()
+	return self.myCAAddr
 }
 
 func (self *Bully) AddCandidate(addrStr string, id *big.Int, timeout time.Duration) error {
@@ -317,7 +317,7 @@ func (self *Bully) myport() int {
 
 func (self *Bully) handshake(addr string, id *big.Int, candy []*node, timeout time.Duration) ([]*node, []string, error) {
 //	fmt.Printf("[HANDSHAKE] I (%v) am shaking hands with %v\n", self.myId, addr)
-	if addr == self.MyAddr().String() {
+	if addr == self.myCAAddr {
 //		fmt.Printf("\tI (%v) am shaking hands with %v; It's me!\n", self.myId, addr)
 		return candy, nil, nil
 	}
@@ -409,7 +409,7 @@ func (self *Bully) handshake(addr string, id *big.Int, candy []*node, timeout ti
 	candyList := loadAllAddr(reply.Body)
 	moreCandy := make([]string, 0, len(candyList))
 	for _, c := range candyList {
-		if c == self.MyAddr().String() {
+		if c == self.myCAAddr {
 			continue
 		}
 		n := findNodeByAddr(candy, c)
@@ -690,7 +690,7 @@ func (self *Bully) process() {
 				ctrl.replyChan <- reply
 			case ctrlQUERY_CANDY:
 				reply := new(controlReply)
-				reply.addr = self.MyAddr().String()
+				reply.addr = self.MyAddr()
 				reply.id = self.myId
 				ctrl.replyChan <- reply
 				for _, node := range candy {
