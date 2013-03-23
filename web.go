@@ -53,9 +53,9 @@ func (self *WebAPI) leader(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "Error: %v\r\n", err)
 	}
 	var leaderAddr string
-	imleader := false
+	imleader := "remote"
 	if self.bully.MyId().Cmp(leader.Id) == 0 {
-		imleader = true
+		imleader = "local"
 		if len(leader.Addr) == 0 {
 			leaderAddr = self.bully.MyAddr()
 		} else {
@@ -72,17 +72,9 @@ func (self *WebAPI) leader(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if self.unixTime {
-		if imleader {
-			fmt.Fprintf(w, "* %v\r\n%v\r\n", leaderAddr, timestamp.Unix())
-		} else {
-			fmt.Fprintf(w, "- %v\r\n%v\r\n", leaderAddr, timestamp.Unix())
-		}
+		fmt.Fprintf(w, "%v\t%v\r\n%v\r\n", imleader, leaderAddr, timestamp.Unix())
 	} else {
-		if imleader {
-			fmt.Fprintf(w, "* %v\r\n%v\r\n", leaderAddr, timestamp)
-		} else {
-			fmt.Fprintf(w, "- %v\r\n%v\r\n", leaderAddr, timestamp)
-		}
+		fmt.Fprintf(w, "%v\t%v\r\n%v\r\n", imleader, leaderAddr, timestamp)
 	}
 }
 
