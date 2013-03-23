@@ -44,6 +44,7 @@ type Bully struct {
 	ctrlChan chan *control
 	ln       net.Listener
 	myAddr   net.Addr
+	myCAAddr string
 }
 
 type Candidate struct {
@@ -382,6 +383,7 @@ func (self *Bully) handshake(addr string, id *big.Int, candy []*node, timeout ti
 		case cmdITSME:
 //			fmt.Printf("\tI (%v) am shaking hands with %v; ME\n", self.myId, addr)
 			self.myAddr, _ = net.ResolveTCPAddr("tcp", addr)
+			self.myCAAddr = addr
 			conn.Close()
 			return candy, nil, nil
 		}
@@ -459,6 +461,7 @@ func (self *Bully) elect(candy []*node, timeout time.Duration) (leader *node, ne
 		leader = new(node)
 		leader.conn = nil
 		leader.id = self.myId
+		leader.caAddr = self.myCAAddr
 		for _, c := range candy {
 			cmd := new(command)
 			cmd.Cmd = cmdCOORDIN
@@ -517,6 +520,7 @@ func (self *Bully) elect(candy []*node, timeout time.Duration) (leader *node, ne
 		leader = new(node)
 		leader.conn = nil
 		leader.id = self.myId
+		leader.caAddr = self.myCAAddr
 //		fmt.Printf("[ELECT RESULT] I (%v) am the leader\n", self.myId)
 		for _, c := range candy {
 			cmd := new(command)
@@ -704,9 +708,13 @@ func (self *Bully) process() {
 				}
 				reply := new(controlReply)
 				if leader.conn != nil {
-					reply.addr = leader.conn.RemoteAddr().String()
+					reply.addr = leader.caAddr
 				} else {
-					reply.addr = self.MyAddr().String()
+					if len(self.myCAAddr) != 0 {
+						reply.addr = self.myCAAddr
+					} else {
+						reply.addr = "localhost"
+					}
 				}
 				reply.timestamp = leaderTimeStamp
 				reply.id = leader.id
