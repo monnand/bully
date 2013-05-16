@@ -18,11 +18,65 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
+
+type WebObserver struct {
+	URL     string
+	Timeout time.Duration
+	Default int
+}
+
+func timeoutDialler(ns time.Duration) func(net, addr string) (c net.Conn, err error) {
+	return func(netw, addr string) (net.Conn, error) {
+		c, err := net.Dial(netw, addr)
+		if err != nil {
+			return nil, err
+		}
+		if ns.Seconds() > 0.0 {
+			c.SetDeadline(time.Now().Add(ns))
+		}
+		return c, nil
+	}
+}
+
+func (self *WebObserver) post(data interface{}) int {
+	if len(self.URL) == 0 || self.URL == "none" {
+		return self.Default
+	}
+	jdata, err := json.Marshal(data)
+	if err != nil {
+		return self.Default
+	}
+	c := http.Client{
+		Transport: &http.Transport{
+			Dial: timeoutDialler(self.Timeout),
+		},
+	}
+	resp, err := c.Post(self.URL, "application/json", bytes.NewReader(jdata))
+	if err != nil {
+		return self.Default
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode
+}
+
+type electedMessage struct {
+	Time int64 `json:"time"`
+}
+
+func (self *WebObserver) OnBeingElected() {
+	msg := new(electedMessage)
+	msg.Time = time.Now().Unix()
+	self.post(msg)
+}
 
 type WebAPI struct {
 	bully    *Bully

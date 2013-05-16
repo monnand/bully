@@ -139,10 +139,6 @@ same, we need to select a leader node to do the job, let others keep running
 and wait the leader die. In this case, we can use *bully* to decide who is the
 leader, and elect another leader when the old one down or new one comes.
 
-## TODO
-
-- webhook
-
 ## License
 
 [Apache 2.0](http://www.apache.org/licenses/LICENSE-2.0.html)

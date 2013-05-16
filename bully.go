@@ -38,6 +38,10 @@ func stringToBig(str string) *big.Int {
 	return ret
 }
 
+type LeaderObserver interface {
+	OnBeingElected()
+}
+
 type Bully struct {
 	myId     *big.Int
 	cmdChan  chan *command
@@ -45,6 +49,7 @@ type Bully struct {
 	ln       net.Listener
 	myAddr   net.Addr
 	myCAAddr string
+	observer LeaderObserver
 }
 
 type Candidate struct {
@@ -156,7 +161,7 @@ func (self *Bully) commandCollector(src *big.Int, conn net.Conn, cmdChan chan<- 
 	for {
 		cmd, err := readCommand(conn)
 		if err != nil {
-//			fmt.Printf("[COLLECTOR] I'm %v; error from %v: %v\n", self.myId, src, err)
+			//fmt.Printf("[COLLECTOR] I'm %v; error from %v: %v\n", self.myId, src, err)
 			cmd := new(command)
 			cmd.src = src
 			cmd.Cmd = cmdBYE
@@ -164,7 +169,7 @@ func (self *Bully) commandCollector(src *big.Int, conn net.Conn, cmdChan chan<- 
 			return
 		}
 		if cmd.Cmd == cmdITSME || cmd.Cmd == cmdBYE {
-//			fmt.Printf("[COLLECTOR] I'm %v; message from %v: %v\n", self.myId, src, cmd.Cmd)
+			//fmt.Printf("[COLLECTOR] I'm %v; message from %v: %v\n", self.myId, src, cmd.Cmd)
 			cmd := new(command)
 			cmd.src = src
 			cmd.Cmd = cmdBYE
@@ -189,7 +194,7 @@ func (self *Bully) commandCollector(src *big.Int, conn net.Conn, cmdChan chan<- 
 	}
 }
 
-func NewBully(ln net.Listener, myId *big.Int) *Bully {
+func NewBully(ln net.Listener, myId *big.Int, obv LeaderObserver) *Bully {
 	ret := new(Bully)
 	if myId == nil {
 		uu, _ := uuid.NewV4()
@@ -200,6 +205,7 @@ func NewBully(ln net.Listener, myId *big.Int) *Bully {
 	ret.cmdChan = make(chan *command)
 	ret.ctrlChan = make(chan *control)
 	ret.ln = ln
+	ret.observer = obv
 	go ret.listen(ln)
 	go ret.process()
 	return ret
@@ -290,10 +296,10 @@ const (
 )
 
 type controlReply struct {
-	addr string
-	id   *big.Int
+	addr      string
+	id        *big.Int
 	timestamp time.Time
-	err  error
+	err       error
 }
 
 type control struct {
@@ -316,13 +322,13 @@ func (self *Bully) myport() int {
 }
 
 func (self *Bully) handshake(addr string, id *big.Int, candy []*node, timeout time.Duration) ([]*node, []string, error) {
-//	fmt.Printf("[HANDSHAKE] I (%v) am shaking hands with %v\n", self.myId, addr)
+	//	fmt.Printf("[HANDSHAKE] I (%v) am shaking hands with %v\n", self.myId, addr)
 	if addr == self.myCAAddr {
-//		fmt.Printf("\tI (%v) am shaking hands with %v; It's me!\n", self.myId, addr)
+		//		fmt.Printf("\tI (%v) am shaking hands with %v; It's me!\n", self.myId, addr)
 		return candy, nil, nil
 	}
 	if findNodeByAddr(candy, addr) != nil {
-//		fmt.Printf("\tI (%v) am shaking hands with %v; I have done this before!\n", self.myId, addr)
+		//		fmt.Printf("\tI (%v) am shaking hands with %v; I have done this before!\n", self.myId, addr)
 		return candy, nil, nil
 	}
 	if id != nil {
@@ -358,7 +364,7 @@ func (self *Bully) handshake(addr string, id *big.Int, candy []*node, timeout ti
 	cmd.Header["port"] = fmt.Sprintf("%v", self.myport())
 	cmd.Header["id"] = self.myId.String()
 	cmd.Body = dumpAllAddr(candy)
-//	fmt.Printf("[HANDSHAKE] I (%v) asked %v to shake hands with %v; %v\n", self.myId, addr, candyStrList, string(cmd.Body))
+	//	fmt.Printf("[HANDSHAKE] I (%v) asked %v to shake hands with %v; %v\n", self.myId, addr, candyStrList, string(cmd.Body))
 	err = writeCommand(conn, cmd)
 	if err != nil {
 		return candy, nil, err
@@ -371,17 +377,17 @@ func (self *Bully) handshake(addr string, id *big.Int, candy []*node, timeout ti
 		switch reply.Cmd {
 		case cmdTRY_LATER:
 			conn.Close()
-//			fmt.Printf("\tI (%v) am shaking hands with %v; he asked me to wait!\n", self.myId, addr)
+			//			fmt.Printf("\tI (%v) am shaking hands with %v; he asked me to wait!\n", self.myId, addr)
 			return candy, nil, ErrTryLater
 		case cmdDUP_CONN:
-//			fmt.Printf("\tI (%v) am shaking hands with %v; DUPCONN\n", self.myId, addr)
+			//			fmt.Printf("\tI (%v) am shaking hands with %v; DUPCONN\n", self.myId, addr)
 			reply := new(command)
 			reply.Cmd = cmdDUP_EXIT
 			writeCommand(conn, reply)
 			conn.Close()
 			return candy, nil, nil
 		case cmdITSME:
-//			fmt.Printf("\tI (%v) am shaking hands with %v; ME\n", self.myId, addr)
+			//			fmt.Printf("\tI (%v) am shaking hands with %v; ME\n", self.myId, addr)
 			self.myAddr, _ = net.ResolveTCPAddr("tcp", addr)
 			self.myCAAddr = addr
 			conn.Close()
@@ -418,7 +424,7 @@ func (self *Bully) handshake(addr string, id *big.Int, candy []*node, timeout ti
 		}
 	}
 
-//	fmt.Printf("[HANDSHAKE] I (%v) have shaked hand with %v (%v), he asked me to shake hands with %v\n", self.myId, addr, rId, moreCandy)
+	//	fmt.Printf("[HANDSHAKE] I (%v) have shaked hand with %v (%v), he asked me to shake hands with %v\n", self.myId, addr, rId, moreCandy)
 
 	candy, _ = insertNode(candy, rId, conn, addr)
 	go self.commandCollector(rId, conn, self.cmdChan, 10*time.Second)
@@ -427,11 +433,16 @@ func (self *Bully) handshake(addr string, id *big.Int, candy []*node, timeout ti
 }
 
 func (self *Bully) electUntilDie(candy []*node, timeout time.Duration) ([]*node, *node) {
-//	fmt.Printf("[ELECT] I (%v) (%v) initiated an election\n", self.myId, self.myport())
+	//	fmt.Printf("[ELECT] I (%v) (%v) initiated an election\n", self.myId, self.myport())
 	leader, candy, err := self.elect(candy, timeout)
 	// Try until we get a leader
 	for leader == nil || err != nil {
 		leader, candy, err = self.elect(candy, timeout)
+	}
+	if self.observer != nil {
+		if leader.id.Cmp(self.myId) == 0 {
+			self.observer.OnBeingElected()
+		}
 	}
 	return candy, leader
 }
@@ -440,11 +451,11 @@ var ErrNeedNewElection = errors.New("Need another round")
 
 func (self *Bully) elect(candy []*node, timeout time.Duration) (leader *node, newCandy []*node, err error) {
 	higherCandy := make([]*node, 0, len(candy))
-//	fmt.Printf("[ELECT TMP] my (%v) candy list %v\n", self.myId, candyToString(candy))
+	//	fmt.Printf("[ELECT TMP] my (%v) candy list %v\n", self.myId, candyToString(candy))
 	newCandy = candy
 	for _, c := range candy {
 		if c.id.Cmp(self.myId) > 0 {
-//			fmt.Printf("[ELECT TMP] I (%v) send elect message to %v\n", self.myId, c.id)
+			//			fmt.Printf("[ELECT TMP] I (%v) send elect message to %v\n", self.myId, c.id)
 			cmd := new(command)
 			cmd.Cmd = cmdELECT
 			err := writeCommand(c.conn, cmd)
@@ -457,7 +468,7 @@ func (self *Bully) elect(candy []*node, timeout time.Duration) (leader *node, ne
 	// No one is higher than me.
 	// I am the leader.
 	if len(higherCandy) <= 0 {
-//		fmt.Printf("[ELECT RESULT] I (%v) am the leader\n", self.myId)
+		//		fmt.Printf("[ELECT RESULT] I (%v) am the leader\n", self.myId)
 		leader = new(node)
 		leader.conn = nil
 		leader.id = self.myId
@@ -475,7 +486,7 @@ func (self *Bully) elect(candy []*node, timeout time.Duration) (leader *node, ne
 		case cmd := <-self.cmdChan:
 			switch cmd.Cmd {
 			case cmdBYE:
-//				fmt.Printf("[BYEINELECTION] I (%v) received bye bye from %v \n", self.myId, cmd.src)
+				//				fmt.Printf("[BYEINELECTION] I (%v) received bye bye from %v \n", self.myId, cmd.src)
 				candy = removeNode(candy, cmd.src)
 				newCandy = candy
 				err = ErrNeedNewElection
@@ -489,7 +500,7 @@ func (self *Bully) elect(candy []*node, timeout time.Duration) (leader *node, ne
 				reply.Cmd = cmdELECT_OK
 				writeCommand(cmd.replyWriter, reply)
 			case cmdELECT_OK:
-//				fmt.Printf("[ELECT TMP] I (%v) received reply from %v\n", self.myId, cmd.src)
+				//				fmt.Printf("[ELECT TMP] I (%v) received reply from %v\n", self.myId, cmd.src)
 				n := findNode(higherCandy, cmd.src)
 				if n == nil {
 					continue
@@ -497,7 +508,7 @@ func (self *Bully) elect(candy []*node, timeout time.Duration) (leader *node, ne
 				slaved = true
 			case cmdCOORDIN:
 				n := findNode(candy, cmd.src)
-//				fmt.Printf("[ELECT RESULT] %v is the leader\n", cmd.src)
+				//				fmt.Printf("[ELECT RESULT] %v is the leader\n", cmd.src)
 				if n == nil {
 					err = ErrNeedNewElection
 					return
@@ -521,7 +532,7 @@ func (self *Bully) elect(candy []*node, timeout time.Duration) (leader *node, ne
 		leader.conn = nil
 		leader.id = self.myId
 		leader.caAddr = self.myCAAddr
-//		fmt.Printf("[ELECT RESULT] I (%v) am the leader\n", self.myId)
+		//		fmt.Printf("[ELECT RESULT] I (%v) am the leader\n", self.myId)
 		for _, c := range candy {
 			cmd := new(command)
 			cmd.Cmd = cmdCOORDIN
@@ -612,17 +623,17 @@ func (self *Bully) process() {
 						continue
 					}
 					candyList := loadAllAddr(cmd.Body)
-//					fmt.Printf("[CANDY] I (%v) received handshake from %v (%v), he asked me to shake hands with %v; %v\n", self.myId, caAddr, cmd.src, candyList, string(cmd.Body))
+					//					fmt.Printf("[CANDY] I (%v) received handshake from %v (%v), he asked me to shake hands with %v; %v\n", self.myId, caAddr, cmd.src, candyList, string(cmd.Body))
 
 					candy, _ = insertNode(candy, cmd.src, cmd.replyWriter, caAddr)
 					candy, _ = self.addCandidates(candy, candyList, leaderTimeout)
-//					fmt.Printf("[CANDYLIST] I (%v) have candies: %v\n", self.myId, candyToString(candy))
+					//					fmt.Printf("[CANDYLIST] I (%v) have candies: %v\n", self.myId, candyToString(candy))
 
 					reply.Cmd = cmdHELLO_REPLY
 					reply.Header = make(map[string]string, 1)
 					reply.Header["id"] = self.myId.String()
 					reply.Body = dumpAllAddr(candy)
-//					fmt.Printf("[HS] I (%v) asked %v (%v) to shake hands with %v\n", self.myId, caAddr, cmd.src, candyToString(candy))
+					//					fmt.Printf("[HS] I (%v) asked %v (%v) to shake hands with %v\n", self.myId, caAddr, cmd.src, candyToString(candy))
 					err := writeCommand(cmd.replyWriter, reply)
 					if err != nil {
 						cmd.replyWriter.Close()
@@ -634,7 +645,7 @@ func (self *Bully) process() {
 					writeCommand(cmd.replyWriter, reply)
 				}
 			case cmdBYE:
-//				fmt.Printf("[BYE] I (%v) received bye bye from %v \n", self.myId, cmd.src)
+				//				fmt.Printf("[BYE] I (%v) received bye bye from %v \n", self.myId, cmd.src)
 				candy = removeNode(candy, cmd.src)
 				if leader == nil || leader.id == nil || cmd.src.Cmp(leader.id) == 0 {
 					candy, leader = self.electUntilDie(candy, leaderTimeout)
@@ -647,13 +658,13 @@ func (self *Bully) process() {
 				if err != nil {
 					continue
 				}
-//				fmt.Printf("[ELECT] I (%v) received election from %v \n", self.myId, cmd.src)
+				//				fmt.Printf("[ELECT] I (%v) received election from %v \n", self.myId, cmd.src)
 				candy, leader = self.electUntilDie(candy, leaderTimeout)
 				leaderTimeStamp = time.Now()
-//				fmt.Printf("[ELECT] I (%v) received election from %v; and the leader is %v(%v) \n", self.myId, cmd.src, leader.caAddr, leader.id)
+				//				fmt.Printf("[ELECT] I (%v) received election from %v; and the leader is %v(%v) \n", self.myId, cmd.src, leader.caAddr, leader.id)
 			case cmdCOORDIN:
 				n := findNode(candy, cmd.src)
-//				fmt.Printf("[ELECT-RESULT] I (%v) received election result from %v and he is the leader\n", self.myId, cmd.src)
+				//				fmt.Printf("[ELECT-RESULT] I (%v) received election result from %v and he is the leader\n", self.myId, cmd.src)
 				if n == nil {
 					candy, leader = self.electUntilDie(candy, leaderTimeout)
 					leaderTimeStamp = time.Now()
@@ -671,22 +682,22 @@ func (self *Bully) process() {
 				oldCandyLen := len(candy)
 				candyList := make([]string, 1, 10)
 				candyList[0] = ctrl.addr
-//				fmt.Printf("[ADDBEFORE] I (%v) was aksed to add %v. Now my candy list contains: %v\n", self.myId, ctrl.addr, candyToString(candy))
+				//				fmt.Printf("[ADDBEFORE] I (%v) was aksed to add %v. Now my candy list contains: %v\n", self.myId, ctrl.addr, candyToString(candy))
 				candy, err = self.addCandidates(candy, candyList, ctrl.timeout)
 				reply := new(controlReply)
 				if err != nil {
 					reply.err = err
 					ctrl.replyChan <- reply
-//					fmt.Printf("[ADDABORT] I (%v) was aksed to add %v. Now it's wrong: %v\n", self.myId, ctrl.addr, err)
+					//					fmt.Printf("[ADDABORT] I (%v) was aksed to add %v. Now it's wrong: %v\n", self.myId, ctrl.addr, err)
 					continue
 				}
 				if len(candy) > oldCandyLen || leader == nil {
-//					fmt.Printf("[NEED ELECTION] I (%v) have added %v. Now my candy list contains: %v\n", self.myId, ctrl.addr, candyToString(candy))
+					//					fmt.Printf("[NEED ELECTION] I (%v) have added %v. Now my candy list contains: %v\n", self.myId, ctrl.addr, candyToString(candy))
 					candy, leader = self.electUntilDie(candy, leaderTimeout)
 					leaderTimeStamp = time.Now()
-//					fmt.Printf("[ELECT] I (%v) initiated the election and the leader is: %v(%v) \n", self.myId, leader.caAddr, leader.id)
+					//					fmt.Printf("[ELECT] I (%v) initiated the election and the leader is: %v(%v) \n", self.myId, leader.caAddr, leader.id)
 				}
-//				fmt.Printf("[ADDAFTER] I (%v) have added %v. Now my candy list contains: %v; and the leader is %v(%v)\n", self.myId, ctrl.addr, candyToString(candy), leader.caAddr, leader.id)
+				//				fmt.Printf("[ADDAFTER] I (%v) have added %v. Now my candy list contains: %v; and the leader is %v(%v)\n", self.myId, ctrl.addr, candyToString(candy), leader.caAddr, leader.id)
 				ctrl.replyChan <- reply
 			case ctrlQUERY_CANDY:
 				reply := new(controlReply)
@@ -702,7 +713,7 @@ func (self *Bully) process() {
 				close(ctrl.replyChan)
 			case ctrlQUERY_LEADER:
 				if leader == nil {
-//					fmt.Printf("[QUERY SO NEED ELECTION] My (%v) candy list contains: %v\n", self.myId, candyToString(candy))
+					//					fmt.Printf("[QUERY SO NEED ELECTION] My (%v) candy list contains: %v\n", self.myId, candyToString(candy))
 					candy, leader = self.electUntilDie(candy, leaderTimeout)
 					leaderTimeStamp = time.Now()
 				}
@@ -730,7 +741,7 @@ func (self *Bully) process() {
 				if len(candy) > 0 {
 					for cmd := range self.cmdChan {
 						if cmd.Cmd == cmdBYE {
-//							fmt.Printf("[BYEWAIT] I (%v) received bye bye from %v \n", self.myId, cmd.src)
+							//							fmt.Printf("[BYEWAIT] I (%v) received bye bye from %v \n", self.myId, cmd.src)
 							candy = removeNode(candy, cmd.src)
 						}
 						if len(candy) == 0 {
@@ -738,7 +749,7 @@ func (self *Bully) process() {
 						}
 					}
 				}
-//				fmt.Printf("[BYEDONE] I (%v) will never take a little piece of cloud\n88888888888888\n", self.myId)
+				//				fmt.Printf("[BYEDONE] I (%v) will never take a little piece of cloud\n88888888888888\n", self.myId)
 				close(ctrl.replyChan)
 				return
 			}
@@ -778,7 +789,7 @@ func (self *Bully) replyHandshake(conn net.Conn) {
 		conn.Close()
 		return
 	}
-//	fmt.Printf("[ANOTHER] I (%v) received handshake from %v, his candy list %v\n", self.myId, idStr, string(cmd.Body))
+	//	fmt.Printf("[ANOTHER] I (%v) received handshake from %v, his candy list %v\n", self.myId, idStr, string(cmd.Body))
 	cmd.src = rId
 	cmd.replyWriter = conn
 	go self.commandCollector(rId, conn, self.cmdChan, 10*time.Second)

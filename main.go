@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"time"
 	"strings"
+	"time"
 )
 
 var argvPort = flag.Int("port", 8117, "port to listen")
@@ -31,6 +31,7 @@ var argvCandidates = flag.String("nodes", "", "comma separated list of nodes.")
 var argvRestBind = flag.String("http", "127.0.0.1:8080", "Network address which will be bind to a restful service")
 var argvShowPort = flag.Bool("showport", false, "Output the leader's port number (which is only useful for debug purpose)")
 var argvUnixTime = flag.Bool("unixTime", true, "Show the timestamp in unix time")
+var argvWebHookURL = flag.String("url", "none", "URL of the webhook. The leader will post an HTTP request to this URL when it has been elected")
 
 func main() {
 	flag.Parse()
@@ -41,7 +42,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return
 	}
-	bully := NewBully(ln, nil)
+	hook := new(WebObserver)
+	hook.URL = *argvWebHookURL
+	hook.Default = 200
+	hook.Timeout = 3 * time.Second
+
+	bully := NewBully(ln, nil, hook)
 	defer bully.Finalize()
 
 	nodeAddr := strings.Split(*argvCandidates, ",")
@@ -63,4 +69,3 @@ func main() {
 	web.Run(*argvRestBind)
 	bully.Finalize()
 }
-
