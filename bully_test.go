@@ -34,7 +34,7 @@ func buildBullies(startPort, N int, t *testing.T) []*Bully {
 		if err != nil {
 			t.Errorf("%v\n", err)
 		}
-		bully := NewBully(ln, nil)
+		bully := NewBully(ln, nil, nil)
 		ret = append(ret, bully)
 	}
 	return ret
@@ -208,4 +208,3 @@ func Test7BullyElect(t *testing.T) {
 	cleanBullies(bullies)
 	fmt.Println("-------------------#------------------")
 }
-
