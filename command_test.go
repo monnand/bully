@@ -18,9 +18,9 @@
 package main
 
 import (
-	"testing"
 	"bytes"
 	"math/big"
+	"testing"
 )
 
 func cmdEq(a, b *command) bool {
@@ -68,7 +68,7 @@ func TestFullCommand(t *testing.T) {
 	cmd.Header = make(map[string]string, 10)
 	cmd.Header["h1"] = "header 1"
 	cmd.Header["h2"] = "header 2"
-	cmd.Body = []byte{1,2,54,2}
+	cmd.Body = []byte{1, 2, 54, 2}
 	testWriteThenRead(cmd, t)
 }
 
@@ -76,7 +76,7 @@ func TestCommandWithBodyOnly(t *testing.T) {
 	cmd := new(command)
 	cmd.Cmd = uint8(1)
 	cmd.Header = make(map[string]string, 10)
-	cmd.Body = []byte{1,2,54,2}
+	cmd.Body = []byte{1, 2, 54, 2}
 	testWriteThenRead(cmd, t)
 }
 
@@ -88,4 +88,3 @@ func TestCommandWithHeaderOnly(t *testing.T) {
 	cmd.Header["h2"] = "header 2"
 	testWriteThenRead(cmd, t)
 }
-
