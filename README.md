@@ -1,6 +1,8 @@
 bully
 =====
 
+[![Build Status](https://travis-ci.org/monnand/bully.png?branch=master)](https://travis-ci.org/monnand/bully)
+
 A leader election program written in [Go](http://golang.org)(golang) using
 [Bully leader election
 algorithm](http://en.wikipedia.org/wiki/Bully_algorithm).
